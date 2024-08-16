@@ -16,9 +16,11 @@ LIBRARY_IOC += pvSave
 DBD += pvSave.dbd
 
 # specify all source files to be compiled and added to the library
-#pvSave_SRCS += xxx
+pvSave_SRCS += pvSave.cpp
 
 pvSave_LIBS += $(EPICS_BASE_IOC_LIBS)
+pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
+pvSave_LIBS += pvDatabase
 
 #===========================
 

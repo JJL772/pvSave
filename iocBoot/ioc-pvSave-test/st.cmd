@@ -12,7 +12,7 @@ dbLoadDatabase "dbd/pvSaveTest.dbd"
 pvSaveTest_registerRecordDeviceDriver pdbbase
 
 ## Load record instances
-#dbLoadRecords("db/pvSaveTest.db","user=jeremy")
+dbLoadRecords("db/pvSaveTest.db","user=jeremy")
 
 cd "${TOP}/iocBoot/${IOC}"
 iocInit

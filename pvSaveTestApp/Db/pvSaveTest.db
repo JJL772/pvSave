@@ -1,0 +1,5 @@
+record(longin, "test001") {
+    field(LOPR, "5")
+    field(HOPR, "100")
+    field(VAL, "2")
+}
