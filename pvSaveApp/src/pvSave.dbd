@@ -3,4 +3,5 @@
 #device(xxx,CONSTANT,devXxxSoft,"SoftChannel")
 #driver(myDriver)
 registrar(registerFuncs)
+registrar(registerFSIO)
 #variable(myVariable)

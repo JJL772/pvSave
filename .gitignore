@@ -32,3 +32,5 @@ O.*/
 .DS_Store
 compile_commands.json
 .cache
+
+RELEASE_SITE

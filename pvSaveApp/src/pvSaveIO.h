@@ -1,10 +1,63 @@
 
 #pragma once
 
-#include "pv/pvData.h"
+#include <string>
+#include <utility>
+#include <stdint.h>
 
-class pvSaveIO
-{
+#include "pvxs/data.h"
+
+namespace pvsave {
+
+/**
+ * pvSaveIO is the base class for all I/O readers/writers used by pvSave
+ * It provides a subset of operations
+ */
+class pvSaveIO {
 public:
-    
+    pvSaveIO() = delete;
+    pvSaveIO(const char* instName);
+    virtual ~pvSaveIO();
+
+    enum Flags
+    {
+        Read    = (1<<0),   /** This supports data reads */
+        Write   = (1<<1),   /** This supports data writes */
+    };
+
+    virtual uint32_t flags() const = 0;
+
+    /** 
+     * \brief Begins a write transaction
+     * \returns False if failed
+     */
+    virtual bool beginWrite() = 0;
+
+    virtual bool writeData(const std::string* pvNames, const pvxs::Value* pvValues, size_t pvCount) = 0;
+
+    /**
+     * \brief Ends a write transaction
+     * \returns False if failed
+     */
+    virtual bool endWrite() = 0;
+
+
+    /**
+     * \brief Begins a read transaction
+     * \returns False if failed
+     */
+    virtual bool beginRead() = 0;
+
+    virtual bool readData(std::vector<std::string>& pvNames, std::vector<pvxs::Value>& pvValues) = 0;
+
+    /**
+     * \brief Ends a read transaction
+     * \returns False if failed
+     */
+    virtual bool endRead() = 0;
+
+protected:
+    std::string instName_;
 };
+
+} // namespace pvsave

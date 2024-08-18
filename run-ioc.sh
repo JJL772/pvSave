@@ -2,4 +2,9 @@
 
 cd "$(dirname "${BASH_SOURCE[0]}")/iocBoot/ioc-pvSave-test"
 
-./st.cmd
+if [ -z "$DEBUGGER" ]; then
+	./st.cmd
+else
+	prog=$(head -n 1 ./st.cmd | sed 's/#!//g')
+	$DEBUGGER $prog ./st.cmd
+fi
