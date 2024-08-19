@@ -4,3 +4,4 @@ BasedOnStyle:  LLVM
 AccessModifierOffset: -4
 IndentWidth: 4
 ColumnLimit: 120
+PackConstructorInitializers: Never
