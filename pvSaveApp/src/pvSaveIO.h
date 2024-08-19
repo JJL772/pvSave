@@ -7,6 +7,8 @@
 
 #include "pvxs/data.h"
 
+#include "pvSave.h"
+
 namespace pvsave {
 
 /**
@@ -33,7 +35,7 @@ public:
      */
     virtual bool beginWrite() = 0;
 
-    virtual bool writeData(const std::string* pvNames, const pvxs::Value* pvValues, size_t pvCount) = 0;
+    virtual bool writeData(const std::vector<DataSource::Channel>& channels, const std::vector<Data>& pvData, size_t pvCount) = 0;
 
     /**
      * \brief Ends a write transaction
@@ -48,7 +50,7 @@ public:
      */
     virtual bool beginRead() = 0;
 
-    virtual bool readData(std::vector<std::string>& pvNames, std::vector<pvxs::Value>& pvValues) = 0;
+    virtual bool readData(std::vector<std::string>& pvNames, std::vector<Data>& pvValues) = 0;
 
     /**
      * \brief Ends a read transaction

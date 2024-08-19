@@ -1,4 +1,6 @@
 
+#pragma once
+
 #include <cstdint>
 #include <cstddef>
 #include <typeindex>
@@ -306,6 +308,12 @@ public:
 
 protected:
 	void copy_from(const Variant& other, bool move) {
+        // Can't copy void, we just clear ourselves out
+        if (other.type_code() == ETypeCode::VOID) {
+            clear();
+            return;
+        }
+
 		// Differing typeindex- dispose current, default construct new
 		if (m_type != other.m_type) {
 			destruct();
@@ -333,7 +341,7 @@ protected:
 	ProxyPtr m_proxy = nullptr;
 	
 	uint16_t m_flags = 0;
-	TypeCode m_type;
+	TypeCode m_type = TypeCode::from_type<void>();
 
 	alignas(ALIGNMENT) char m_data[SIZE];
 };

@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <list>
 
 #include "pvSave.h"
 #include "pvSaveIO.h"
@@ -16,31 +17,20 @@
 #include "initHooks.h"
 #include "iocsh.h"
 #include "macLib.h"
-
-#include "pvxs/client.h"
-#include "pvxs/data.h"
-#include "pvxs/iochooks.h"
-#include "pvxs/server.h"
-#include "pvxs/sharedpv.h"
-#include "pvxs/source.h"
-
-using ConnectPtr = std::shared_ptr<pvxs::client::Connect>;
-using SubscriptionPtr = std::shared_ptr<pvxs::client::Subscription>;
-
-/** Returns the global pvxs context */
-pvxs::client::Context &globalContext() {
-    static pvxs::client::Context *ctx;
-    if (!ctx) {
-        ctx = new pvxs::client::Context(pvxs::ioc::server().clientConfig());
-        *ctx = pvxs::client::Context::fromEnv();
-    }
-    return *ctx;
-}
+#include "epicsTime.h"
 
 /** Global list of IO backend instances */
 std::unordered_map<std::string, pvsave::pvSaveIO *> &pvsave::ioBackends() {
     static std::unordered_map<std::string, pvsave::pvSaveIO *> b;
     return b;
+}
+
+pvsave::DataSource* pvsave::dataSource() {
+    static DataSource* s;
+    if (!s) {
+        s = createDataSourceCA();
+    }
+    return s;
 }
 
 /**
@@ -68,9 +58,8 @@ std::unordered_map<std::string, std::shared_ptr<MonitorSet>> monitorSets;
  */
 class pvSaveContext {
 public:
-    pvSaveContext(std::shared_ptr<MonitorSet> set, pvxs::client::Context &context)
-        : context_(context),
-          monitorSet_(set) {
+    pvSaveContext(std::shared_ptr<MonitorSet> set)
+        : monitorSet_(set) {
         monitorSet_->context = this;
     }
 
@@ -78,52 +67,12 @@ public:
      * Called after device support init to connect/monitor all relevant PVs
      */
     void init() {
-        for (const auto &pv : monitorSet_->pvList) {
-            auto chan = globalContext()
-                            .connect(pv)
-                            .onConnect(std::bind(&pvSaveContext::onConnect, this, pv))
-                            .onDisconnect(std::bind(&pvSaveContext::onDisconnect, this, pv))
-                            .exec();
-            channels_.push_back(chan);
-        }
-        globalContext().hurryUp();
+        pvsave::dataSource()->connect(monitorSet_->pvList, channels_);
     }
 
     bool save() {
-        std::vector<std::shared_ptr<pvxs::client::Operation>> requests;
-        std::vector<pvxs::Value> values;
-        std::vector<std::string> names;
-        names.reserve(channels_.size());
-        values.resize(channels_.size());
-
-        std::atomic_uint32_t pending;
-
-        /* Perform a bunch of GET requests to get our data */
-        for (int i = 0; i < channels_.size(); ++i) {
-            auto channel = channels_[i];
-            names.push_back(channel->name());
-            if (!channel->connected())
-                continue;
-
-            pending++;
-
-            auto op = globalContext()
-                          .get(channel->name())
-                          .result([this, &values, i, &pending](pvxs::client::Result &&r) {
-                              this->onResult(std::move(r), values[i], pending);
-                          })
-                          .exec();
-
-            /* Store off a pointer for the operation */
-            requests.push_back(op);
-        }
-
-        globalContext().hurryUp();
-
-        /* FIXME: This is pretty bad!!! */
-        while (pending > 0) {
-            epicsThreadSleep(0.1);
-        }
+        std::vector<pvsave::Data> data;
+        pvsave::dataSource()->get(channels_, data);
 
         /* Forward the data to each of the IO handlers */
         for (auto &io : monitorSet_->io) {
@@ -133,7 +82,7 @@ public:
                     continue;
                 }
 
-                if (!io->writeData(names.data(), values.data(), values.size())) {
+                if (!io->writeData(channels_, data, data.size())) {
                     printf("pvSave: io->writeData: save failed\n");
                     /* Fallthrough as we want the IO handler to do cleanup */
                 }
@@ -148,7 +97,7 @@ public:
     }
 
 private:
-    bool restore(pvsave::pvSaveIO *io, std::vector<std::shared_ptr<pvxs::client::Operation>> &requests) {
+    bool restore(pvsave::pvSaveIO *io) {
         if (!(io->flags() & pvsave::pvSaveIO::Read))
             return false;
 
@@ -158,7 +107,7 @@ private:
         }
 
         std::vector<std::string> pvNames;
-        std::vector<pvxs::Value> pvValues;
+        std::vector<pvsave::Data> pvValues;
         if (!io->readData(pvNames, pvValues)) {
             printf("pvSave: io->readData: restore failed\n");
             /* Fallthrough to allow cleanup */
@@ -168,35 +117,16 @@ private:
             printf("pvSave: io->endRead: restore failed\n");
         }
 
-        for (int i = 0; i < pvNames.size(); ++i) {
-            const auto &value = pvValues[i];
-            const auto &name = pvNames[i];
+        pvsave::dataSource()->put(channels_, pvValues);
 
-            printf("Restoring %s\n", name.c_str());
-            auto op = globalContext()
-                          .put(name)
-                          .fetchPresent(false)
-                          .rawRequest(value)
-                          .server("")
-                          //.set("value", "10000")
-                          .exec();
-            requests.push_back(op);
-        }
         return true;
     }
 
 public:
-    bool restore(bool now = false) {
-        if (!now) {
-            pendingRestore_ = true;
-            return true;
-        }
-
-        std::vector<std::shared_ptr<pvxs::client::Operation>> requests;
-
+    bool restore() {
         bool restoredAny = false;
         for (auto &io : monitorSet_->io) {
-            if (restore(io, requests)) {
+            if (restore(io)) {
                 restoredAny = true;
                 break;
             }
@@ -206,21 +136,11 @@ public:
             printf("%s: restore failed: no backend was able to restore\n", "pvSaveContext::restore");
             return false;
         }
-
-        globalContext().hurryUp();
-
-        try {
-            for (auto &req : requests)
-                req->wait(5.0);
-        } catch (...) {
-            printf("Restore timeout\n");
-        }
-
         return true;
     }
 
     /** Returns the channels */
-    inline const std::vector<ConnectPtr> &channels() const { return channels_; }
+    inline const std::vector<pvsave::DataSource::Channel> &channels() const { return channels_; }
 
     /** Returns the monitor set we were configured with */
     inline const std::shared_ptr<MonitorSet> &monitorSet() const { return monitorSet_; }
@@ -229,46 +149,13 @@ public:
 
     epicsTimeStamp lastProc_;
 
-private:
-    void onConnect(const std::string &pv) {
-        printf("pvSave: Connected PV %s\n", pv.c_str());
-        restore(true);
-    }
-
-    void onDisconnect(const std::string &pv) { printf("pvSave: Disconnected PV %s\n", pv.c_str()); }
-
-    void onResult(pvxs::client::Result &&result, pvxs::Value &value, std::atomic_uint32_t &pending) {
-        if (result.error()) {
-            printf("Error\n");
-            return;
-        }
-        value = result();
-        --pending;
-    }
-
 protected:
-    std::vector<SubscriptionPtr> subscriptions_;
-    std::vector<ConnectPtr> channels_;
-    pvxs::client::Context &context_;
     std::shared_ptr<MonitorSet> monitorSet_;
+    std::vector<pvsave::DataSource::Channel> channels_;
     bool pendingRestore_ = false;
 };
 
 std::list<pvSaveContext> pvSaveContext::saveContexts;
-
-static void listRecordsCallFunc(const iocshArgBuf *buf) {
-    auto server = pvxs::ioc::server();
-    for (auto &sname : server.listSource()) {
-        auto source = server.getSource(sname.first);
-        if (!source)
-            continue;
-
-        auto channels = source->onList();
-        for (const auto &name : *channels.names) {
-            printf("%s\n", name.c_str());
-        }
-    }
-}
 
 static std::shared_ptr<MonitorSet> findMonitorSet(const char *name) {
     auto it = monitorSets.find(name);
@@ -414,6 +301,7 @@ static void pvsMonitorSetListChannelsCallFunc(const iocshArgBuf *buf) {
     bool onlyConnected = filter ? !epicsStrCaseCmp(filter, "connected") : false;
     bool onlyDisconnected = filter ? !epicsStrCaseCmp(filter, "disconnected") : false;
 
+#if 0
     if (mset->context) {
         printf("%s (%lu channels)\n", name, mset->context->channels().size());
         for (auto &conn : mset->context->channels()) {
@@ -426,6 +314,7 @@ static void pvsMonitorSetListChannelsCallFunc(const iocshArgBuf *buf) {
     } else {
         printf("No channels yet\n");
     }
+#endif
 }
 
 static void pvsThreadProc(void *data) {
@@ -464,7 +353,7 @@ void pvsInitHook(initHookState state) {
     /* Create the contexts and init everything else */
     if (state == initHookAtIocBuild) {
         for (auto &ms : monitorSets) {
-            pvSaveContext::saveContexts.emplace_back(ms.second, globalContext());
+            pvSaveContext::saveContexts.emplace_back(ms.second);
         }
     }
     /* Kick off discovery of PVs */
@@ -548,11 +437,6 @@ void registerFuncs() {
     {
         static const iocshFuncDef funcDef = {"pvsMonitorSetList", 0, nullptr};
         iocshRegister(&funcDef, pvsMonitorSetListCallFunc);
-    }
-
-    {
-        static iocshFuncDef funcDef = {"pvsListRecords", 0, NULL};
-        iocshRegister(&funcDef, listRecordsCallFunc);
     }
 
     initHookRegister(pvsInitHook);

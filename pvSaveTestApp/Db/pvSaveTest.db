@@ -3,3 +3,7 @@ record(longin, "test001") {
     field(HOPR, "100")
     field(VAL, "2")
 }
+
+record(stringin, "test002") {
+    field(VAL, "hello")
+}

@@ -18,6 +18,8 @@
 
 constexpr int MAX_LINE_LENGTH = 4096;
 
+namespace pvsave {
+
 enum fileSystemIOType { FSIO_TYPE_TEXT, FSIO_TYPE_JSON };
 
 class fileSystemIO : public pvsave::pvSaveIO {
@@ -40,11 +42,11 @@ public:
 
     bool beginWrite() override { return openFile(); }
 
-    bool saveText(const std::string *pvNames, const pvxs::Value *pvValues, size_t pvCount) {
+    bool saveText(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount) {
         const char *funcName = "fileSystemIO::saveText";
         for (int i = 0; i < pvCount; ++i) {
             /** PV name */
-            if (fputs(pvNames[i].c_str(), handle_) < 0) {
+            if (fputs(pvNames[i].channelName.c_str(), handle_) < 0) {
                 printf("%s: fputs failed: %s\n", funcName, strerror(errno));
                 return false;
             }
@@ -53,24 +55,23 @@ public:
             const auto &value = pvValues[i];
 
             /** Type string */
-            fputs(pvsave::ntTypeString(value), handle_);
+            fputs(pvsave::typeCodeString(value.type_code()), handle_);
             fputc(' ', handle_);
 
             /** Value */
-            if (!strncmp(value.id().c_str(), "epics:nt/NTScalar", sizeof("epics:nt/NTScalar") - 1)) {
-                char line[MAX_LINE_LENGTH];
-                pvsave::ntScalarToString(value, line, sizeof(line));
-                fputs(line, handle_);
-            } else {
-                printf("Unsupported type %s\n", value.id().c_str());
+            char line[MAX_LINE_LENGTH];
+            line[0] = 0;
+            if (!dataToString(pvValues[i], line, sizeof(line))) {
+                printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
             }
 
+            fputs(line, handle_);
             fputc('\n', handle_);
         }
         return true;
     }
 
-    bool writeData(const std::string *pvNames, const pvxs::Value *pvValues, size_t pvCount) override {
+    bool writeData(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data>& pvValues, size_t pvCount) override {
         const char *funcName = "fileSystemIO::writeData";
         if (fseek(handle_, 0, SEEK_SET) != 0) {
             printf("%s: fseek failed: %s\n", funcName, strerror(errno));
@@ -100,7 +101,7 @@ public:
 
     bool beginRead() override { return openFile(); }
 
-    bool readText(std::vector<std::string> &pvNames, std::vector<pvxs::Value> &pvValues) {
+    bool readText(std::vector<std::string> &pvNames, std::vector<Data> &pvValues) {
         const char *funcName = "fileSystemIO::readText";
 
         char *lptr = nullptr;
@@ -133,8 +134,8 @@ public:
                 continue;
             }
 
-            auto ntType = pvsave::ntTypeFromString(ptype);
-            if (!ntType.first) {
+            auto typeCode = pvsave::typeCodeFromString(ptype);
+            if (!typeCode.first) {
                 printf("%s: file %s, line %d: unknown type name '%s'\n", funcName, path_.c_str(), line, ptype);
                 continue;
             }
@@ -145,7 +146,7 @@ public:
                 continue;
             }
 
-            auto value = pvsave::ntScalarFromString(parsedValue.c_str(), ntType.second);
+            auto value = pvsave::dataParseString(parsedValue.c_str(), typeCode.second);
             if (!value.first) {
                 printf("%s: file %s, line %d: unable to parse value '%s'\n", funcName, path_.c_str(), line, pval);
                 continue;
@@ -162,7 +163,7 @@ public:
         return true;
     }
 
-    bool readData(std::vector<std::string> &pvNames, std::vector<pvxs::Value> &pvValues) override {
+    bool readData(std::vector<std::string> &pvNames, std::vector<Data> &pvValues) override {
         const char *funcName = "fileSystemIO::readData";
         if (fseek(handle_, 0, SEEK_SET) != 0) {
             printf("%s: fseek failed: %s\n", funcName, strerror(errno));
@@ -206,6 +207,8 @@ protected:
     FILE *handle_;
 };
 
+} // namespace pvsave
+
 static void pvsConfigureFileSystemIOCallFunc(const iocshArgBuf *buf) {
     constexpr const char *funcName = "pvsConfigureFileSystemIO";
     const char *ioName = buf[0].sval;
@@ -219,13 +222,13 @@ static void pvsConfigureFileSystemIOCallFunc(const iocshArgBuf *buf) {
 
     fileFormat = fileFormat ? fileFormat : "text";
 
-    fileSystemIOType type = FSIO_TYPE_TEXT;
+    pvsave::fileSystemIOType type = pvsave::FSIO_TYPE_TEXT;
     if (!epicsStrCaseCmp(fileFormat, "text"))
-        type = FSIO_TYPE_TEXT;
+        type = pvsave::FSIO_TYPE_TEXT;
     else if (!epicsStrCaseCmp(fileFormat, "json"))
-        type = FSIO_TYPE_JSON;
+        type = pvsave::FSIO_TYPE_JSON;
 
-    new fileSystemIO(ioName, filePath, type);
+    new pvsave::fileSystemIO(ioName, filePath, type);
 }
 
 void registerFSIO() {
