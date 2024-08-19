@@ -45,4 +45,12 @@ constexpr size_t align_max() {
 	return a > b ? a : b;
 }
 
+/** C++11 compat for C++17 features */
+#undef IF_CONSTEXPR
+#if __cplusplus >= 201703L
+#define IF_CONSTEXPR constexpr
+#else
+#define IF_CONSTEXPR
+#endif
+
 }

@@ -37,7 +37,7 @@ INC += pvsave/serialize.h
 INC += pvsave/utility.h
 INC += pvsave/variant.h
 
-USR_CXXFLAGS+=-O0
+USR_CXXFLAGS+=-std=c++14
 
 #===========================
 

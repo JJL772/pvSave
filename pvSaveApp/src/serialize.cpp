@@ -96,7 +96,7 @@ template<> int parseValue<int64_t>(const char* str, int64_t* out) {
 
 template<typename T>
 std::pair<bool, pvxs::Value> parseNtScalarFromNumericString(const char* pval, pvxs::TypeCode type) {
-    static_assert(std::is_integral_v<T> || std::is_floating_point_v<T>, "Must be integral or floating-point");
+    static_assert(std::is_integral<T>::value || std::is_floating_point<T>::value, "Must be integral or floating-point");
 
     T val;
     if (parseValue(pval, &val) != 0) {

@@ -197,9 +197,9 @@ public:
 		m_type.set<T>();
 
 		m_flags = 0;
-		if constexpr (std::is_move_assignable_v<T>)
+		if IF_CONSTEXPR (std::is_move_assignable<T>::value)
 			m_flags |= Movable;
-		if constexpr (std::is_trivial_v<T>)
+		if IF_CONSTEXPR (std::is_trivial<T>::value)
 			m_flags |= Trivial;
 
 		// Build wrappers around common type-dependent operations. This is so we can call the right methods even when no type is readily available
@@ -209,11 +209,11 @@ public:
 				new (v->data()) T;
 				return;
 			case ProxyOp::Destruct:
-				if constexpr (!std::is_trivial_v<T>)
+				if IF_CONSTEXPR (!std::is_trivial<T>::value)
 					v->get_unchecked<T>()->~T();
 				return;
 			case ProxyOp::Move:
-				if constexpr (std::is_move_assignable_v<T>) {
+				if IF_CONSTEXPR (std::is_move_assignable<T>::value) {
 					(*v->get_unchecked<T>()) = std::move(*reinterpret_cast<const T*>(src));
 					return;
 				}
