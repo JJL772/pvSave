@@ -10,9 +10,6 @@
 #include "epicsString.h"
 #include "iocsh.h"
 
-#include "pvxs/data.h"
-#include "pvxs/nt.h"
-
 #include "pvSaveIO.h"
 #include "serialize.h"
 

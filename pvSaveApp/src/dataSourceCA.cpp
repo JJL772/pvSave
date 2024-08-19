@@ -83,9 +83,16 @@ void DataSourceCA::connect(const std::vector<std::string>& pvList, std::vector<C
 }
 
 void DataSourceCA::put(const std::vector<Channel>& channels, const std::vector<Data>& pvData) {
+    if (pvData.size() == 0) return; // FIXME
+    
     for (size_t i = 0; i < channels.size(); ++i) {
         const auto& channel = channels[i];
         auto* pdb = static_cast<dbAddr*>(channel.contextData);
+
+        /** Channel not connected or no data to restore */
+        if (!pdb || pvData[i].is<void>()) {
+            continue;
+        }
 
         long result;
 

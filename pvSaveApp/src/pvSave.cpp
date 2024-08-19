@@ -147,7 +147,7 @@ public:
 
     static std::list<pvSaveContext> saveContexts;
 
-    epicsTimeStamp lastProc_;
+    epicsTimeStamp lastProc_ = {0,0};
 
 protected:
     std::shared_ptr<MonitorSet> monitorSet_;

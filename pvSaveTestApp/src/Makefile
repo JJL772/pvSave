@@ -37,6 +37,9 @@ pvSaveTest_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvSaveTest_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 pvSaveTest_LIBS += pvxsIoc
 
+# FIXME: remove
+USR_SYS_LIBS += curl
+
 #===========================
 
 include $(TOP)/configure/RULES
