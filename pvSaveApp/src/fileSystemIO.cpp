@@ -181,6 +181,25 @@ public:
 
     bool endRead() override { return true; }
 
+    void report(FILE* fp, int indent) override {
+        pvsave::pindent(fp, indent);
+        fprintf(fp, "fileSystemIO\n");
+        pvsave::pindent(fp, indent);
+        fprintf(fp, "type: ");
+        switch(type_) {
+        case FSIO_TYPE_JSON:
+            fprintf(fp, "json\n"); break;
+        case FSIO_TYPE_TEXT:
+            fprintf(fp, "text\n"); break;
+        default:
+            break;
+        }
+        pvsave::pindent(fp, indent);
+        fprintf(fp, "flags: %s%s\n", (flags() & Read) ? "r" : "", (flags() & Write) ? "w" : "");
+        pvsave::pindent(fp, indent);
+        fprintf(fp, "file: %s\n", path_.c_str());
+    }
+
 protected:
     fileSystemIOType type_;
     std::string path_;

@@ -186,3 +186,8 @@ const char* pvsave::parseString(const char* pstr, std::string& out) {
 
     return q ? pstr : s;
 }
+
+void pvsave::pindent(FILE* fp, int indent) {
+    for (int i = 0; i < indent; ++i)
+        fputc(' ', fp);
+}

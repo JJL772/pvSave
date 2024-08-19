@@ -56,6 +56,13 @@ public:
      */
     virtual bool endRead() = 0;
 
+    /**
+     * \brief Display info about this IO instance to the stream
+     * \param fp Stream to fprintf to
+     * \param indent Indentation level (measured in number of spaces) to display with. Just a formatting helper
+     */
+    virtual void report(FILE* fp, int indent) = 0;
+
 protected:
     std::string instName_;
 };

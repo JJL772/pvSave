@@ -3,7 +3,11 @@
 
 #include "pvxs/data.h"
 
+#include "variant.hpp"
+
 namespace pvsave {
+
+    using Data = Variant<int64_t, uint64_t, double, std::string>;
 
     const char* ntTypeString(const pvxs::Value& value);
 
@@ -16,4 +20,11 @@ namespace pvsave {
     std::pair<bool, pvxs::Value> ntScalarFromString(const char* pval, pvxs::TypeCode type);
 
     const char* parseString(const char* pstr, std::string& out);
+
+    /**
+     * \brief Helper to pad out to an indent level
+     * \param fp Stream to print to
+     * \param indent Indentation level to pad to. This is measured in spaces (8 = 8 spaces total)
+     */
+    void pindent(FILE* fp, int indent);
 }

@@ -10,4 +10,7 @@ pvsave::pvSaveIO::pvSaveIO(const char* instName) :
 
 pvsave::pvSaveIO::~pvSaveIO()
 {
+    auto it = pvsave::ioBackends().find(instName_);
+    if (it != pvsave::ioBackends().end())
+        pvsave::ioBackends().erase(it);
 }

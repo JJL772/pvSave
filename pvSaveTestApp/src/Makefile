@@ -17,8 +17,7 @@ pvSaveTest_DBD += base.dbd
 
 # Include dbd files from all support applications:
 pvSaveTest_DBD += pvSave.dbd
-pvSaveTest_DBD += qsrv.dbd
-pvSaveTest_DBD += PVAServerRegister.dbd
+pvSaveTest_DBD += pvxsIoc.dbd
 
 # Add all the support libraries needed by this IOC
 pvSaveTest_LIBS += pvSave
@@ -34,7 +33,9 @@ pvSaveTest_SRCS_vxWorks += -nil-
 #pvSaveTest_OBJS_vxWorks += $(EPICS_BASE_BIN)/vxComLibrary
 
 # Finally link to the EPICS Base libraries
-pvSaveTest_LIBS += $(EPICS_BASE_IOC_LIBS) $(EPICS_BASE_PVA_CORE_LIBS) qsrv
+pvSaveTest_LIBS += $(EPICS_BASE_IOC_LIBS)
+pvSaveTest_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
+pvSaveTest_LIBS += pvxsIoc
 
 #===========================
 
