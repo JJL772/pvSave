@@ -18,7 +18,7 @@ def main():
     global db
     if os.path.exists(_db_path()):
         with open(_db_path(), 'r') as fp:
-            db = json.load(db)
+            db = json.load(fp)
 
 
 @app.route('/pvget', methods=['GET'])

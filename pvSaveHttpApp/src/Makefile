@@ -8,29 +8,20 @@ include $(TOP)/configure/CONFIG
 #==================================================
 # build a support library
 
-LIBRARY_IOC += pvSave
+LIBRARY_IOC += pvSaveHttp
 
 # xxxRecord.h will be created from xxxRecord.dbd
 #DBDINC += xxxRecord
-# install pvSave.dbd into <top>/dbd
-DBD += pvSave.dbd
+# install pvSaveHttp.dbd into <top>/dbd
+DBD += pvSaveHttp.dbd
 
 # specify all source files to be compiled and added to the library
-pvSave_SRCS += pvSave.cpp
-pvSave_SRCS += pvSaveIO.cpp
-pvSave_SRCS += fileSystemIO.cpp
-pvSave_SRCS += serialize.cpp
-pvSave_SRCS += dataSourceCA.cpp
+pvSaveHttp_SRCS += httpIO.cpp
 
-pvSave_LIBS += $(EPICS_BASE_IOC_LIBS)
-pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
+pvSaveHttp_LIBS += pvSave
+pvSaveHttp_LIBS += $(EPICS_BASE_IOC_LIBS)
 
-INC += pvsave/pvSave.h
-INC += pvsave/serialize.h
-INC += pvsave/utility.h
-INC += pvsave/variant.h
-
-USR_CXXFLAGS+=-std=c++14
+USR_SYS_LIBS += curl
 
 #===========================
 

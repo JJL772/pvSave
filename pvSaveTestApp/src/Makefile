@@ -16,11 +16,12 @@ DBD += pvSaveTest.dbd
 pvSaveTest_DBD += base.dbd
 
 # Include dbd files from all support applications:
-pvSaveTest_DBD += pvSave.dbd
+pvSaveTest_DBD += pvSave.dbd pvSaveHttp.dbd
 pvSaveTest_DBD += pvxsIoc.dbd
 
 # Add all the support libraries needed by this IOC
 pvSaveTest_LIBS += pvSave
+pvSaveTest_LIBS += pvSaveHttp
 
 # pvSaveTest_registerRecordDeviceDriver.cpp derives from pvSaveTest.dbd
 pvSaveTest_SRCS += pvSaveTest_registerRecordDeviceDriver.cpp
