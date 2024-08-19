@@ -6,7 +6,7 @@
 #include <vector>
 #include <stdint.h>
 
-#include "variant.hpp"
+#include "pvsave/variant.h"
 
 namespace pvsave {
     class pvSaveIO;
@@ -33,6 +33,7 @@ namespace pvsave {
         float,
         double,
         std::string>;
+
 
     /**
      * Abstract interface implemented by all data source 'plugins'
@@ -74,4 +75,73 @@ namespace pvsave {
     };
 
     DataSource* createDataSourceCA();
+
+    /**
+    * pvSaveIO is the base class for all I/O readers/writers used by pvSave
+    * It provides a subset of operations
+    */
+    class pvSaveIO {
+    public:
+        pvSaveIO() = delete;
+        pvSaveIO(const char* instName);
+        virtual ~pvSaveIO();
+
+        enum Flags
+        {
+            Read    = (1<<0),   /** This supports data reads */
+            Write   = (1<<1),   /** This supports data writes */
+        };
+
+        virtual uint32_t flags() const = 0;
+
+        /** 
+        * \brief Begins a write transaction
+        * \returns False if failed
+        */
+        virtual bool beginWrite() = 0;
+
+        /** 
+         * \brief Write channel data to the IO backend
+         * \param channels List of channels to write
+         * \param pvData List of PV data. This is a 1:1 mapping to the channels
+         * \param pvCount Number of items in both arrays
+         */
+        virtual bool writeData(const std::vector<DataSource::Channel>& channels, const std::vector<Data>& pvData, size_t pvCount) = 0;
+
+        /**
+        * \brief Ends a write transaction
+        * \returns False if failed
+        */
+        virtual bool endWrite() = 0;
+
+
+        /**
+        * \brief Begins a read transaction
+        * \returns False if failed
+        */
+        virtual bool beginRead() = 0;
+
+        /**
+         * \brief Read channel data for the specified PVs
+         * \param pvNames PV names
+         * \param pvValues PV values. pvValues will come in with length 0. It is up to you to add all output data here.
+         */
+        virtual bool readData(std::vector<std::string>& pvNames, std::vector<Data>& pvValues) = 0;
+
+        /**
+        * \brief Ends a read transaction
+        * \returns False if failed
+        */
+        virtual bool endRead() = 0;
+
+        /**
+        * \brief Display info about this IO instance to the stream
+        * \param fp Stream to fprintf to
+        * \param indent Indentation level (measured in number of spaces) to display with. Just a formatting helper
+        */
+        virtual void report(FILE* fp, int indent) = 0;
+
+    protected:
+        std::string instName_;
+    };
 }

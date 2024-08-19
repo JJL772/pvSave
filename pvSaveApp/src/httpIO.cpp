@@ -10,8 +10,8 @@
 #include "epicsString.h"
 #include "iocsh.h"
 
-#include "pvSaveIO.h"
-#include "serialize.h"
+#include "pvsave/pvSave.h"
+#include "pvsave/serialize.h"
 
 #include "curl/curl.h"
 

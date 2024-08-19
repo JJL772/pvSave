@@ -4,9 +4,9 @@
 #include <unordered_map>
 #include <vector>
 #include <list>
+#include <memory>
 
-#include "pvSave.h"
-#include "pvSaveIO.h"
+#include "pvsave/pvSave.h"
 
 #include "epicsAlgorithm.h"
 #include "epicsExport.h"

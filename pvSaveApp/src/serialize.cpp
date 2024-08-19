@@ -6,7 +6,7 @@
 #include "epicsStdlib.h"
 #include "epicsAssert.h"
 
-#include "serialize.h"
+#include "pvsave/serialize.h"
 
 #include "pvxs/nt.h"
 

@@ -1,6 +1,5 @@
 
-#include "pvSaveIO.h"
-#include "pvSave.h"
+#include "pvsave/pvSave.h"
 
 pvsave::pvSaveIO::pvSaveIO(const char* instName) :
     instName_(instName)
