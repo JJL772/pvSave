@@ -28,7 +28,7 @@ public:
 
     bool openFile() {
         if (!handle_)
-            handle_ = fopen(path_.c_str(), "r+b"); /** Don't truncate file on load, but open in RDWR mode */
+            handle_ = fopen(path_.c_str(), "a+b"); /** Don't truncate file on load, but open in RDWR mode */
 
         if (!handle_) {
             printf("fileSystemIO::beginWrite: Failed to open '%s': %s\n", path_.c_str(), strerror(errno));

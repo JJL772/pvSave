@@ -4,9 +4,13 @@
 #include "dbCommon.h"
 
 #include "pvsave/pvSave.h"
+#include "util.h"
 
 namespace pvsave {
 
+/**
+ * Implements a data source for interacting with EPICS V3 DB
+ */
 class DataSourceCA : public DataSource {
 public:
     bool init() override;
@@ -74,6 +78,7 @@ void DataSourceCA::connect(const std::vector<std::string>& pvList, std::vector<C
         auto& pv = pvList[i];
         if (dbNameToAddr(pv.c_str(), &addrs_[i]) != 0) {
             printf("Failed to connect channel %s\n", pv.c_str());
+            addrs_[i] = {};
         }
         else {
             printf("Connected %s\n", pv.c_str());
@@ -95,6 +100,8 @@ void DataSourceCA::put(const std::vector<Channel>& channels, const std::vector<D
         }
 
         long result;
+
+        dbAutoScanLock al(pdb->precord);
 
         /** Special handling for string since we cannot directly memcpy std::string in there */
         if (pdb->dbr_field_type == DBR_STRING) {
@@ -122,6 +129,8 @@ void DataSourceCA::get(const std::vector<Channel>& channels, std::vector<Data>& 
         data = dataFromDbfType(pdb->dbr_field_type);
 
         long result;
+
+        dbAutoScanLock al(pdb->precord);
 
         /** Special handling for string fields */
         if (pdb->dbr_field_type == DBR_STRING) {
