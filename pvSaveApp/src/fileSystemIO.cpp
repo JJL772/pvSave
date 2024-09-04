@@ -206,8 +206,8 @@ protected:
 
 } // namespace pvsave
 
-static void pvsConfigureFileSystemIOCallFunc(const iocshArgBuf *buf) {
-    constexpr const char *funcName = "pvsConfigureFileSystemIO";
+static void pvSave_ConfigureFileSystemIOCallFunc(const iocshArgBuf *buf) {
+    constexpr const char *funcName = "pvSave_ConfigureFileSystemIO";
     const char *ioName = buf[0].sval;
     const char *filePath = buf[1].sval;
     const char *fileFormat = buf[2].sval;
@@ -235,8 +235,8 @@ void registerFSIO() {
         static iocshArg arg1 = {"filePath", iocshArgString};
         static iocshArg arg2 = {"fileFormat", iocshArgString};
         static iocshArg *args[] = {&arg0, &arg1, &arg2};
-        static iocshFuncDef funcDef = {"pvsConfigureFileSystemIO", 3, args};
-        iocshRegister(&funcDef, pvsConfigureFileSystemIOCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_ConfigureFileSystemIO", 3, args};
+        iocshRegister(&funcDef, pvSave_ConfigureFileSystemIOCallFunc);
     }
 }
 

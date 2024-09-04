@@ -12,16 +12,18 @@ dbLoadDatabase "dbd/pvSaveTest.dbd"
 pvSaveTest_registerRecordDeviceDriver pdbbase
 
 ## Load record instances
-dbLoadRecords("db/pvSaveTest.db","user=jeremy")
+dbLoadRecords("db/pvSaveTest.db","PFX=myioc")
 
+pvSave_CreatePvSet("test1", 10.0)
 
-pvsCreateMonitorSet("test1", 10.0)
+pvSave_ConfigureFileSystemIO("fsio1", "test.sav", "text")
+#pvSave_ConfigureHTTPIO("httpio1", "http://localhost:5000")
+#pvSave_AddPvSetPV("test1", "test001.VAL")
+#pvSave_AddPvSetPV("test1", "test002.VAL")
+pvSave_AddPvSetList("test1", "${TOP}/iocBoot/${IOC}/pvlist.pvl", "PFX=myioc")
+pvSave_AddPvSetIO("test1", "fsio1")
 
-pvsConfigureFileSystemIO("fsio1", "test.sav", "text")
-pvsAddMonitorSetPV("test1", "test001.VAL")
-pvsAddMonitorSetIO("test1", "fsio1")
-
-pvsSetMonitorSetRestoreStage("test1", "0")
+pvSave_SetPvSetRestoreStage("test1", "0")
 
 
 cd "${TOP}/iocBoot/${IOC}"

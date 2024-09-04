@@ -18,6 +18,12 @@
 #include "iocsh.h"
 #include "macLib.h"
 #include "epicsTime.h"
+#include "macLib.h"
+
+constexpr int MAX_LINE_LENGTH = 1024;
+
+static int configuredThreadPriority = epicsThreadPriorityLow;
+static epicsThreadId threadId = 0;
 
 /** Global list of IO backend instances */
 std::unordered_map<std::string, pvsave::pvSaveIO *> &pvsave::ioBackends() {
@@ -157,6 +163,80 @@ protected:
 
 std::list<pvSaveContext> pvSaveContext::saveContexts;
 
+static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& list) {
+    MAC_HANDLE* handle = nullptr;
+    if (macCreateHandle(&handle, nullptr) != 0) {
+        printf("readPvList: macCreateHandle failed\n");
+        return false;
+    }
+
+    char** pairs = nullptr;
+    if (macParseDefns(handle, defs, &pairs) < 0) {
+        printf("readPvList: macParseDefns failed to parse definitions string\n");
+        macDeleteHandle(handle);
+        return false;
+    }
+
+    for (char** p = pairs; *p; p += 2)
+        macPutValue(handle, *p, *(p+1));
+
+    int result = 0;
+    do {
+        char buf[MAX_LINE_LENGTH];
+        size_t len = sizeof(buf);
+        char* line = buf;
+        result = getline(&line, &len, fp);
+        if (result <= 0) break;
+
+        /** Find start of comment and NULL terminate there */
+        char* s = nullptr;
+        if ((s = strpbrk(line, "#")))
+            *s = 0;
+
+        char expanded[MAX_LINE_LENGTH];
+        long elen = 0;
+        if ((elen = macExpandString(handle, line, expanded, sizeof(expanded))) < 0) {
+            printf("readPvList: unexpanded macro string\n");
+            /** Treat this as a success */
+        }
+
+        /** Skip leading whitespace */
+        char* l = expanded;
+        while (isspace(*l))
+            l++;
+
+        /** ..and trim off trailing */
+        for (char* p = expanded+elen-1; *p && p >= expanded; p--) {
+            if (isspace(*p))
+                *p = 0;
+        }
+
+        /** Only insert if there's something left */
+        if (*l) {
+            list.push_back(l);
+            printf("Adding '%s'\n", l);
+        }
+
+    } while(result >= 0);
+
+    macDeleteHandle(handle);
+    free(pairs);
+    return true;
+}
+
+static bool readPvListFile(const char* file, const char* defs, std::vector<std::string>& list) {
+    FILE*fp = fopen(file, "rb");
+    if (!fp) {
+        printf("readPvListFile: Unable to open %s\n", file);
+        return false;
+    }
+
+    bool b = readPvList(fp, defs, list);
+
+    fclose(fp);
+    return b;
+}
+
 static std::shared_ptr<MonitorSet> findMonitorSet(const char *name) {
     auto it = monitorSets.find(name);
     if (it == monitorSets.end())
@@ -164,36 +244,40 @@ static std::shared_ptr<MonitorSet> findMonitorSet(const char *name) {
     return it->second;
 }
 
-static void pvsCreateMonitorSetCallFunc(const iocshArgBuf *buf) {
+static void pvSave_CreatePvSetCallFunc(const iocshArgBuf *buf) {
     const char *name = buf[0].sval;
     double rate = buf[1].dval;
 
     if (rate < 10.0) {
-        printf("pvsCreateMonitorSet: rate must be >= 10 (%f)\n", rate);
+        printf("pvSave_CreatePvSet: rate must be >= 10 (%f)\n", rate);
+        iocshSetError(-1);
         return;
     }
 
     if (!name) {
-        printf("pvsCreateMonitorSet expects 'name' parameter\n");
+        printf("pvSave_CreatePvSet expects 'name' parameter\n");
+        iocshSetError(-1);
         return;
     }
 
     monitorSets.insert({name, std::make_shared<MonitorSet>(name, rate)});
 }
 
-static void pvsAddMonitorSetIOCallFunc(const iocshArgBuf *buf) {
-    constexpr const char *funcName = "pvsAddMonitorSetIO";
+static void pvSave_AddPvSetIOCallFunc(const iocshArgBuf *buf) {
+    constexpr const char *funcName = "pvSave_AddPvSetIO";
     const char *name = buf[0].sval;
     const char *ioName = buf[1].sval;
 
     if (!name || !ioName) {
         printf("%s: expected 'name' and 'ioName' parameter\n", funcName);
+        iocshSetError(-1);
         return;
     }
 
     auto ms = findMonitorSet(name);
     if (!ms) {
         printf("%s: invalid monitor set name '%s'\n", funcName, name);
+        iocshSetError(-1);
         return;
     }
 
@@ -201,41 +285,71 @@ static void pvsAddMonitorSetIOCallFunc(const iocshArgBuf *buf) {
         ms->io.push_back(it->second);
     } else {
         printf("%s: No such IO backend '%s'\n", funcName, ioName);
+        iocshSetError(-1);
         return;
     }
 }
 
-static void pvsAddMonitorSetPVCallFunc(const iocshArgBuf *buf) {
-    constexpr const char *funcName = "pvsAddMonitorSetPV";
+static void pvSave_AddPvSetPvCallFunc(const iocshArgBuf *buf) {
+    constexpr const char *funcName = "pvSave_AddPvSetPv";
     const char *name = buf[0].sval;
     const char *pvPattern = buf[1].sval;
 
     if (!name || !pvPattern) {
         printf("%s: expected 'name' and 'pvPattern' parameter\n", funcName);
+        iocshSetError(-1);
         return;
     }
 
     auto mset = findMonitorSet(name);
     if (!mset) {
         printf("%s: invalid monitor set name '%s'\n", funcName, name);
+        iocshSetError(-1);
         return;
     }
     mset->pvList.push_back(pvPattern);
 }
 
-static void pvsSetMonitorSetRestoreStageCallFunc(const iocshArgBuf *buf) {
-    constexpr const char *funcName = "pvsSetMonitorSetRestoreStage";
+static void pvSave_AddPvSetListCallFunc(const iocshArgBuf* buf) {
+    constexpr const char *funcName = "pvSave_AddPvSetList";
     const char *name = buf[0].sval;
-    const char *stage = buf[1].sval;
+    const char *file = buf[1].sval;
+    const char *macros = buf[2].sval;
 
-    if (!name || !stage) {
-        printf("%s: expected 'name' and 'stage' parameter\n", funcName);
+    if (!name || !file || !macros) {
+        printf("%s: expected 'name', 'file' and 'macros' parameter\n", funcName);
+        iocshSetError(-1);
         return;
     }
 
     auto mset = findMonitorSet(name);
     if (!mset) {
         printf("%s: invalid monitor set name '%s'\n", funcName, name);
+        iocshSetError(-1);
+        return;
+    }
+
+    if (!readPvListFile(file, macros, mset->pvList)) {
+        printf("%s: Unable to read '%s'\n", funcName, file);
+        iocshSetError(-1);
+    }
+}
+
+static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf *buf) {
+    constexpr const char *funcName = "pvSave_SetPvSetRestoreStage";
+    const char *name = buf[0].sval;
+    const char *stage = buf[1].sval;
+
+    if (!name || !stage) {
+        printf("%s: expected 'name' and 'stage' parameter\n", funcName);
+        iocshSetError(-1);
+        return;
+    }
+
+    auto mset = findMonitorSet(name);
+    if (!mset) {
+        printf("%s: invalid monitor set name '%s'\n", funcName, name);
+        iocshSetError(-1);
         return;
     }
 
@@ -254,6 +368,7 @@ static void pvsSetMonitorSetRestoreStageCallFunc(const iocshArgBuf *buf) {
             break;
         default:
             printf("%s: invalid stage '%d': 0 or 1 allowed\n", funcName, st);
+            iocshSetError(-1);
             return;
         }
     }
@@ -267,11 +382,12 @@ static void pvsSetMonitorSetRestoreStageCallFunc(const iocshArgBuf *buf) {
             mset->stage = initHookAfterIocRunning;
         } else {
             printf("%s: invalid stage '%s': 'AfterInitDevSup' (0), 'AfterInitDatabase' (1) allowed\n", funcName, stage);
+            iocshSetError(-1);
         }
     }
 }
 
-static void pvsMonitorSetListCallFunc(const iocshArgBuf *buf) {
+static void pvSave_ListPvSetsCallFunc(const iocshArgBuf *buf) {
     for (auto &pair : monitorSets) {
         printf("%s: %lu PVs\n", pair.first.c_str(), pair.second->pvList.size());
         printf("  IO ports:\n");
@@ -282,26 +398,28 @@ static void pvsMonitorSetListCallFunc(const iocshArgBuf *buf) {
     }
 }
 
-static void pvsMonitorSetListChannelsCallFunc(const iocshArgBuf *buf) {
-    constexpr const char *funcName = "pvsMonitorSetListChannels";
+static void pvSave_ListChannelsCallFunc(const iocshArgBuf *buf) {
+    constexpr const char *funcName = "pvSave_ListChannels";
     const char *name = buf[0].sval;
     const char *filter = buf[1].sval;
 
     if (!name) {
         printf("%s: expected 'name' parameter\n", funcName);
+        iocshSetError(-1);
         return;
     }
 
     auto mset = findMonitorSet(name);
     if (!mset) {
         printf("%s: invalid monitor set name '%s'\n", funcName, name);
+        iocshSetError(-1);
         return;
     }
 
+#if 0
     bool onlyConnected = filter ? !epicsStrCaseCmp(filter, "connected") : false;
     bool onlyDisconnected = filter ? !epicsStrCaseCmp(filter, "disconnected") : false;
 
-#if 0
     if (mset->context) {
         printf("%s (%lu channels)\n", name, mset->context->channels().size());
         for (auto &conn : mset->context->channels()) {
@@ -317,7 +435,39 @@ static void pvsMonitorSetListChannelsCallFunc(const iocshArgBuf *buf) {
 #endif
 }
 
-static void pvsThreadProc(void *data) {
+static void pvSave_SetThreadPriorityCallFunc(const iocshArgBuf* buf) {
+    constexpr const char* funcName = "pvSave_SetThreadPriority";
+    const char* prio = buf[0].sval;
+
+    if (threadId) {
+        printf("%s: thread is already created; this function must be called before iocInit!\n", funcName);
+        iocshSetError(-1);
+        return;
+    }
+
+    if (!strcmp(prio, "low")) {
+        configuredThreadPriority = epicsThreadPriorityLow;
+    }
+    else if (!strncmp(prio, "med", 3)) {
+        configuredThreadPriority = epicsThreadPriorityMedium;
+    }
+    else if(!strcmp(prio, "high")) {
+        configuredThreadPriority = epicsThreadPriorityHigh;
+    }
+    else if(!strcmp(prio, "max")) {
+        configuredThreadPriority = epicsThreadPriorityMax;
+    }
+    else if(!strcmp(prio, "min")) {
+        configuredThreadPriority = epicsThreadPriorityMin;
+    }
+    else {
+        printf("%s: Unknown thread priority '%s': must be low, med, high, max or min\n", funcName, prio);
+        iocshSetError(-1);
+        return;
+    }
+}
+
+static void pvSaveThreadProc(void *data) {
     epicsTimeStamp startTime;
     epicsTimeGetCurrent(&startTime);
 
@@ -381,62 +531,80 @@ void pvsInitHook(initHookState state) {
 
         epicsThreadOpts opts;
         opts.joinable = false;
-        opts.priority = epicsThreadPriorityMedium;
+        opts.priority = configuredThreadPriority;
         opts.stackSize = epicsThreadStackMedium;
-        epicsThreadCreateOpt("pvSave", pvsThreadProc, nullptr, &opts);
+        epicsThreadCreateOpt("pvSave", pvSaveThreadProc, nullptr, &opts);
     }
 }
 
 void registerFuncs() {
-    /* pvsCreateMonitorSet */
+    /* pvSave_CreatePvSet */
     {
         static iocshArg arg0 = {"setName", iocshArgString};
         static iocshArg arg1 = {"rate", iocshArgDouble};
         static const iocshArg *args[] = {&arg0, &arg1};
-        static iocshFuncDef funcDef = {"pvsCreateMonitorSet", 2, args};
-        iocshRegister(&funcDef, pvsCreateMonitorSetCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_CreatePvSet", 2, args};
+        iocshRegister(&funcDef, pvSave_CreatePvSetCallFunc);
     }
 
-    /* pvsAddMonitorSetIO */
+    /* pvSave_AddPvSetIO */
     {
         static iocshArg arg0 = {"setName", iocshArgString};
         static iocshArg arg1 = {"ioName", iocshArgString};
         static const iocshArg *args[] = {&arg0, &arg1};
-        static iocshFuncDef funcDef = {"pvsAddMonitorSetIO", 2, args};
-        iocshRegister(&funcDef, pvsAddMonitorSetIOCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_AddPvSetIO", 2, args};
+        iocshRegister(&funcDef, pvSave_AddPvSetIOCallFunc);
     }
 
-    /* pvsAddMonitorSetPV */
+    /* pvSave_AddPvSetPv */
     {
         static iocshArg arg0 = {"setName", iocshArgString};
         static iocshArg arg1 = {"pvNameRegexp", iocshArgString};
         static const iocshArg *args[] = {&arg0, &arg1};
-        static iocshFuncDef funcDef = {"pvsAddMonitorSetPV", 2, args};
-        iocshRegister(&funcDef, pvsAddMonitorSetPVCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_AddPvSetPv", 2, args};
+        iocshRegister(&funcDef, pvSave_AddPvSetPvCallFunc);
     }
 
-    /* pvsSetMonitorSetRestoreStage */
+    /* pvSave_SetPvSetRestoreStage */
     {
         static iocshArg arg0 = {"setName", iocshArgString};
         static iocshArg arg1 = {"stage", iocshArgString};
         static const iocshArg *args[] = {&arg0, &arg1};
-        static iocshFuncDef funcDef = {"pvsSetMonitorSetRestoreStage", 2, args};
-        iocshRegister(&funcDef, pvsSetMonitorSetRestoreStageCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_SetPvSetRestoreStage", 2, args};
+        iocshRegister(&funcDef, pvSave_SetPvSetRestoreStageCallFunc);
     }
 
-    /* pvsMonitorSetListChannels */
+    /* pvSave_ListChannels */
     {
         static iocshArg arg0 = {"setName", iocshArgString};
         static iocshArg arg1 = {"filter", iocshArgString};
         static const iocshArg *args[] = {&arg0, &arg1};
-        static iocshFuncDef funcDef = {"pvsMonitorSetListChannels", 2, args};
-        iocshRegister(&funcDef, pvsMonitorSetListChannelsCallFunc);
+        static iocshFuncDef funcDef = {"pvSave_ListChannels", 2, args};
+        iocshRegister(&funcDef, pvSave_ListChannelsCallFunc);
     }
 
-    /* pvsMonitorSetList */
+    /* pvSave_AddPvSetListCallFunc */
     {
-        static const iocshFuncDef funcDef = {"pvsMonitorSetList", 0, nullptr};
-        iocshRegister(&funcDef, pvsMonitorSetListCallFunc);
+        static iocshArg arg0 = {"pvSetName", iocshArgString};
+        static iocshArg arg1 = {"file", iocshArgString};
+        static iocshArg arg2 = {"macroString", iocshArgString};
+        static const iocshArg *args[] = {&arg0, &arg1, &arg2};
+        static iocshFuncDef funcDef = {"pvSave_AddPvSetList", 3, args};
+        iocshRegister(&funcDef, pvSave_AddPvSetListCallFunc);
+    }
+
+    /* pvSave_ListPvSets */
+    {
+        static const iocshFuncDef funcDef = {"pvSave_ListPvSets", 0, nullptr};
+        iocshRegister(&funcDef, pvSave_ListPvSetsCallFunc);
+    }
+
+    /* pvSave_SetThreadPriority */
+    {
+        static iocshArg arg0 = {"priority", iocshArgString};
+        static const iocshArg* args[] = {&arg0};
+        static iocshFuncDef funcDef = {"pvSave_SetThreadPriority", 1, args};
+        iocshRegister(&funcDef, pvSave_SetThreadPriorityCallFunc);
     }
 
     initHookRegister(pvsInitHook);

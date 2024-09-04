@@ -1,5 +1,9 @@
-- Implement concept of data sources. Being able to save structured data directly from pvxs is nice, but legacy CA support
-will probably be necessary for lower spec'd systems (mvme-6100, mvme-3100, etc.). This would require stripping pvxs::Value
-from APIs and abstracting that.
-
 - Optimize file parsing and saving. Doing way too many allocations, don't want to fragment heap space too much.
+
+- Need to profile this whole thing. Probably use VTune?
+
+- Unit tests to confirm reliability of variant and such
+
+- C++11 support. sticking with C++14 for now because of template annoyances
+
+- Implement loading PV list from file

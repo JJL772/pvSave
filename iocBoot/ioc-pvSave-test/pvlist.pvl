@@ -1,0 +1,8 @@
+# test
+
+$(PFX):test001.VAL #qu
+$(PFX):test002.VAL# stuff
+$(PFX):test003.VAL
+  $(PFX):test003.VAL # amogus
+$(PFX):test004.VAL # another
+# comment test

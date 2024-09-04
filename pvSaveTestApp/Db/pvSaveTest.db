@@ -1,9 +1,9 @@
-record(longin, "test001") {
+record(longin, "$(PFX):test001") {
     field(LOPR, "5")
     field(HOPR, "100")
     field(VAL, "2")
 }
 
-record(stringin, "test002") {
+record(stringin, "$(PFX):test002") {
     field(VAL, "hello")
 }
