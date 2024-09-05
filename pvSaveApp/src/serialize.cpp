@@ -33,7 +33,7 @@ template<> int parseValue<int64_t>(const char* str, int64_t* out) {
 
 #if HAVE_PVXS
 
-#include "pvsave/pvxsSerialize.h
+#include "pvsave/pvxsSerialize.h"
 #include "pvxs/nt.h"
 
 bool pvsave::ntScalarToString(const pvxs::Value &value, char *buf, size_t bufLen) {
