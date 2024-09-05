@@ -8,6 +8,32 @@
 
 #include "pvsave/serialize.h"
 
+template<typename T> int parseValue(const char* str, T* out);
+template<> int parseValue<epicsInt8>(const char* str, epicsInt8* out) { return epicsParseInt8(str, out, 10, nullptr); }
+template<> int parseValue<epicsInt16>(const char* str, epicsInt16* out) { return epicsParseInt16(str, out, 10, nullptr); }
+template<> int parseValue<epicsInt32>(const char* str, epicsInt32* out) { return epicsParseInt32(str, out, 10, nullptr); }
+template<> int parseValue<epicsInt64>(const char* str, epicsInt64* out) { return epicsParseInt64(str, out, 10, nullptr); }
+template<> int parseValue<epicsUInt8>(const char* str, epicsUInt8* out) { return epicsParseUInt8(str, out, 10, nullptr); }
+template<> int parseValue<epicsUInt16>(const char* str, epicsUInt16* out) { return epicsParseUInt16(str, out, 10, nullptr); }
+template<> int parseValue<epicsUInt32>(const char* str, epicsUInt32* out) { return epicsParseUInt32(str, out, 10, nullptr); }
+template<> int parseValue<epicsUInt64>(const char* str, epicsUInt64* out) { return epicsParseUInt64(str, out, 10, nullptr); }
+template<> int parseValue<epicsFloat32>(const char* str, epicsFloat32* out) { return epicsParseFloat32(str, out, nullptr); }
+template<> int parseValue<epicsFloat64>(const char* str, epicsFloat64* out) { return epicsParseFloat64(str, out, nullptr); }
+
+// FIXME: these overloads suck and will not work on some platforms.
+template<> int parseValue<uint64_t>(const char* str, uint64_t* out) {
+    *out = strtoul(str, nullptr, 10);
+    return errno;
+}
+
+template<> int parseValue<int64_t>(const char* str, int64_t* out) {
+    *out = strtoul(str, nullptr, 10);
+    return errno;
+}
+
+#if HAVE_PVXS
+
+#include "pvsave/pvxsSerialize.h
 #include "pvxs/nt.h"
 
 bool pvsave::ntScalarToString(const pvxs::Value &value, char *buf, size_t bufLen) {
@@ -70,30 +96,6 @@ std::pair<bool, pvxs::TypeCode> pvsave::ntTypeFromString(const char *ptype) {
     return {false, pvxs::TypeCode()};
 }
 
-template<typename T> int parseValue(const char* str, T* out);
-template<> int parseValue<epicsInt8>(const char* str, epicsInt8* out) { return epicsParseInt8(str, out, 10, nullptr); }
-template<> int parseValue<epicsInt16>(const char* str, epicsInt16* out) { return epicsParseInt16(str, out, 10, nullptr); }
-template<> int parseValue<epicsInt32>(const char* str, epicsInt32* out) { return epicsParseInt32(str, out, 10, nullptr); }
-template<> int parseValue<epicsInt64>(const char* str, epicsInt64* out) { return epicsParseInt64(str, out, 10, nullptr); }
-template<> int parseValue<epicsUInt8>(const char* str, epicsUInt8* out) { return epicsParseUInt8(str, out, 10, nullptr); }
-template<> int parseValue<epicsUInt16>(const char* str, epicsUInt16* out) { return epicsParseUInt16(str, out, 10, nullptr); }
-template<> int parseValue<epicsUInt32>(const char* str, epicsUInt32* out) { return epicsParseUInt32(str, out, 10, nullptr); }
-template<> int parseValue<epicsUInt64>(const char* str, epicsUInt64* out) { return epicsParseUInt64(str, out, 10, nullptr); }
-template<> int parseValue<epicsFloat32>(const char* str, epicsFloat32* out) { return epicsParseFloat32(str, out, nullptr); }
-template<> int parseValue<epicsFloat64>(const char* str, epicsFloat64* out) { return epicsParseFloat64(str, out, nullptr); }
-
-// FIXME: these overloads suck and will not work on some platforms.
-template<> int parseValue<uint64_t>(const char* str, uint64_t* out) {
-    *out = strtoul(str, nullptr, 10);
-    return errno;
-}
-
-template<> int parseValue<int64_t>(const char* str, int64_t* out) {
-    *out = strtoul(str, nullptr, 10);
-    return errno;
-}
-
-
 template<typename T>
 std::pair<bool, pvxs::Value> parseNtScalarFromNumericString(const char* pval, pvxs::TypeCode type) {
     static_assert(std::is_integral<T>::value || std::is_floating_point<T>::value, "Must be integral or floating-point");
@@ -144,6 +146,8 @@ std::pair<bool, pvxs::Value> pvsave::ntScalarFromString(const char *pval, pvxs::
         return {false, pvxs::Value{}};
     }
 }
+
+#endif
 
 int translateEscape(int c) {
     switch(c) {

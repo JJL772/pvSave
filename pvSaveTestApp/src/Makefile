@@ -17,7 +17,7 @@ pvSaveTest_DBD += base.dbd
 
 # Include dbd files from all support applications:
 pvSaveTest_DBD += pvSave.dbd pvSaveHttp.dbd
-pvSaveTest_DBD += pvxsIoc.dbd
+#pvSaveTest_DBD += pvxsIoc.dbd
 
 # Add all the support libraries needed by this IOC
 pvSaveTest_LIBS += pvSave
@@ -36,7 +36,7 @@ pvSaveTest_SRCS_vxWorks += -nil-
 # Finally link to the EPICS Base libraries
 pvSaveTest_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvSaveTest_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
-pvSaveTest_LIBS += pvxsIoc
+#pvSaveTest_LIBS += pvxsIoc
 
 # FIXME: remove
 USR_SYS_LIBS += curl

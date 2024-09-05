@@ -27,6 +27,7 @@ pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 
 INC += pvsave/pvSave.h
 INC += pvsave/serialize.h
+INC += pvsave/pvxsSerialize.h
 INC += pvsave/utility.h
 INC += pvsave/variant.h
 
