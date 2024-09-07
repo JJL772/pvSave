@@ -78,7 +78,10 @@ public:
 
     bool save() {
         std::vector<pvsave::Data> data;
-        pvsave::dataSource()->get(channels_, data);
+        data.resize(channels_.size());
+        for (size_t i = 0; i < channels_.size(); ++i) {
+            pvsave::dataSource()->get(channels_[i], data[i]);
+        }
 
         /* Forward the data to each of the IO handlers */
         for (auto &io : monitorSet_->io) {
@@ -102,7 +105,6 @@ public:
         return true;
     }
 
-private:
     bool restore(pvsave::pvSaveIO *io) {
         if (!(io->flags() & pvsave::pvSaveIO::Read))
             return false;
@@ -112,9 +114,8 @@ private:
             return false;
         }
 
-        std::vector<std::string> pvNames;
-        std::vector<pvsave::Data> pvValues;
-        if (!io->readData(pvNames, pvValues)) {
+        std::unordered_map<std::string, pvsave::Data> pvs;
+        if (!io->readData(pvs)) {
             printf("pvSave: io->readData: restore failed\n");
             /* Fallthrough to allow cleanup */
         }
@@ -123,12 +124,16 @@ private:
             printf("pvSave: io->endRead: restore failed\n");
         }
 
-        pvsave::dataSource()->put(channels_, pvValues);
+        for (size_t i = 0; i < channels_.size(); ++i) {
+            auto it = pvs.find(channels_[i].channelName);
+            if (it == pvs.end())
+                continue; /* PV not found in save data */
+            pvsave::dataSource()->put(channels_[i], it->second);
+        }
 
         return true;
     }
 
-public:
     bool restore() {
         bool restoredAny = false;
         for (auto &io : monitorSet_->io) {
@@ -361,7 +366,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf *buf) {
             mset->stage = initHookAfterInitDevSup;
             break;
         case 1:
-            mset->stage = initHookAfterFinishDevSup;
+            mset->stage = initHookAfterInitDatabase;
             break;
         case 2:
             mset->stage = initHookAfterIocRunning;
@@ -377,7 +382,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf *buf) {
         if (!epicsStrCaseCmp(stage, "AfterInitDevSup")) {
             mset->stage = initHookAfterInitDevSup;
         } else if (!epicsStrCaseCmp(stage, "AfterInitDatabase")) {
-            mset->stage = initHookAfterFinishDevSup;
+            mset->stage = initHookAfterInitDatabase;
         } else if (!epicsStrCaseCmp(stage, "AfterIocRunning")) {
             mset->stage = initHookAfterIocRunning;
         } else {
@@ -517,7 +522,7 @@ void pvsInitHook(initHookState state) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
-    } else if (state == initHookAfterFinishDevSup) {
+    } else if (state == initHookAfterInitDatabase) {
         /* Pass 1 restore */
         for (auto &context : pvSaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)

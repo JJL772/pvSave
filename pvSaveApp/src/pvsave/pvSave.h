@@ -64,14 +64,14 @@ namespace pvsave {
          * \param channels List of channels to PUT
          * \param pvData the data to put into these channels. This is a 1:1 mapping between the arrays. that is, channels[1] corresponds to pvData[1] and so on
          */
-        virtual void put(const std::vector<Channel>& channels, const std::vector<Data>& pvData) = 0;
+        virtual void put(const Channel& channels, const Data& pvData) = 0;
 
         /**
          * Get PV data
          * \param pvList List of PVs to get data for
          * \param pvData list to place the data into. Expects a 1:1 mapping of pvList <-> pvData
          */
-        virtual void get(const std::vector<Channel>& channels, std::vector<Data>& pvData) = 0;
+        virtual void get(const Channel& channel, Data& pvData) = 0;
     };
 
     DataSource* createDataSourceCA();
@@ -126,7 +126,7 @@ namespace pvsave {
          * \param pvNames PV names
          * \param pvValues PV values. pvValues will come in with length 0. It is up to you to add all output data here.
          */
-        virtual bool readData(std::vector<std::string>& pvNames, std::vector<Data>& pvValues) = 0;
+        virtual bool readData(std::unordered_map<std::string, Data>& pvs) = 0;
 
         /**
         * \brief Ends a read transaction

@@ -12,11 +12,13 @@ public:
     dbAutoScanLock(dbCommon* pdb) :
         pdb_(pdb)
     {
-        dbScanLock(pdb);
+        if (pdb)
+            dbScanLock(pdb);
     }
 
     ~dbAutoScanLock()
     {
-        dbScanUnlock(pdb_);
+        if (pdb_)
+            dbScanUnlock(pdb_);
     }
 };

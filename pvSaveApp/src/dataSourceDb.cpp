@@ -2,6 +2,7 @@
 #include "dbAccess.h"
 #include "dbAddr.h"
 #include "dbCommon.h"
+#include "dbStaticLib.h"
 
 #include "pvsave/pvSave.h"
 #include "util.h"
@@ -14,20 +15,23 @@ namespace pvsave {
 class DataSourceCA : public DataSource {
 public:
     bool init() override;
-    void connect(const std::vector<std::string>& pvList, std::vector<Channel>& outChannels) override;
-    void put(const std::vector<Channel>& channels, const std::vector<Data>& pvData) override;
-    void get(const std::vector<Channel>& channels, std::vector<Data>& pvData) override;
+    void connect(const std::vector<std::string> &pvList, std::vector<Channel> &outChannels) override;
+    void put(const Channel &channel, const Data &pvData) override;
+    void get(const Channel &channel, Data &pvData) override;
+
 private:
-    std::vector<dbAddr> addrs_;
+    struct ContextData {
+        dbAddr addr = {};
+        DBENTRY entry = {};
+    };
+    std::vector<ContextData> addrs_;
 };
 
-bool DataSourceCA::init() {
-    return true;
-}
+bool DataSourceCA::init() { return true; }
 
 Data dataFromDbfType(short type) {
     Data d;
-    switch(type) {
+    switch (type) {
     case DBF_STRING:
         d.construct<std::string>();
         return d;
@@ -72,90 +76,81 @@ Data dataFromDbfType(short type) {
     }
 }
 
-void DataSourceCA::connect(const std::vector<std::string>& pvList, std::vector<Channel>& outChannels) {
+void DataSourceCA::connect(const std::vector<std::string> &pvList, std::vector<Channel> &outChannels) {
     addrs_.resize(pvList.size());
     for (size_t i = 0; i < pvList.size(); ++i) {
-        auto& pv = pvList[i];
-        if (dbNameToAddr(pv.c_str(), &addrs_[i]) != 0) {
+        auto &pv = pvList[i];
+        if (dbNameToAddr(pv.c_str(), &addrs_[i].addr) != 0) {
             printf("Failed to connect channel %s\n", pv.c_str());
             addrs_[i] = {};
-        }
-        else {
+        } else {
             printf("Connected %s\n", pv.c_str());
+            dbInitEntry(pdbbase, &addrs_[i].entry);
             outChannels.push_back({pv, &addrs_[i]});
         }
     }
 }
 
-void DataSourceCA::put(const std::vector<Channel>& channels, const std::vector<Data>& pvData) {
-    if (pvData.size() == 0) return; // FIXME
-    
-    for (size_t i = 0; i < channels.size(); ++i) {
-        const auto& channel = channels[i];
-        auto* pdb = static_cast<dbAddr*>(channel.contextData);
+void DataSourceCA::put(const Channel &channel, const Data &data) {
+    auto *pdb = static_cast<dbAddr *>(channel.contextData);
 
-        /** Channel not connected or no data to restore */
-        if (!pdb || pvData[i].is<void>()) {
-            continue;
+    /** Channel not connected or no data to restore */
+    if (!pdb || data.is<void>()) {
+        return;
+    }
+
+    auto* pctx = static_cast<ContextData*>(channel.contextData);
+    if (!pctx->entry.pdbbase) {
+        dbInitEntryFromAddr(pdb, &pctx->entry);
+        dbInitEntry(pdbbase, &pctx->entry);
+    }
+
+    long result;
+
+    dbAutoScanLock al(pdb->precord);
+
+    /** Special handling for string since we cannot directly memcpy std::string in there */
+    if (pdb->dbr_field_type == DBR_STRING) {
+        auto val = data.value<std::string>();
+        if ((result = dbPutField(pdb, pdb->dbr_field_type, val.c_str(), val.size()))) {
+            printf("DataSourceCA::put: dbPutField() failed: %ld\n", result);
         }
-
-        long result;
-
-        dbAutoScanLock al(pdb->precord);
-
-        /** Special handling for string since we cannot directly memcpy std::string in there */
-        if (pdb->dbr_field_type == DBR_STRING) {
-            auto val = pvData[i].value<std::string>();
-            if ((result = dbPutField(pdb, pdb->dbr_field_type, val.c_str(), val.size()))) {
-                printf("DataSourceCA::put: dbPutField() failed: %ld\n", result);    
-            }
-        }
-        else {
-            if ((result = dbPutField(pdb, pdb->dbr_field_type, pvData[i].data(), 1)) != 0) {
-                printf("DataSourceCA::put: dbPutField() failed: %ld\n", result);
-                continue;
-            }
+    } else {
+        if ((result = dbPutField(pdb, pdb->dbr_field_type, data.data(), 1)) != 0) {
+            printf("DataSourceCA::put: dbPutField() failed: %ld\n", result);
+            return;
         }
     }
 }
 
-void DataSourceCA::get(const std::vector<Channel>& channels, std::vector<Data>& pvData) {
-    pvData.resize(channels.size());
+void DataSourceCA::get(const Channel &channel, Data &data) {
+    auto *pdb = static_cast<dbAddr *>(channel.contextData);
+    data = dataFromDbfType(pdb->dbr_field_type);
 
-    for (size_t i = 0; i < channels.size(); ++i) {
-        const auto& channel = channels[i];
-        auto* pdb = static_cast<dbAddr*>(channel.contextData);
-        auto& data = pvData[i];
-        data = dataFromDbfType(pdb->dbr_field_type);
+    long result;
 
-        long result;
+    dbAutoScanLock al(pdb->precord);
 
-        dbAutoScanLock al(pdb->precord);
+    /** Special handling for string fields */
+    if (pdb->dbr_field_type == DBR_STRING) {
+        char buf[MAX_STRING_SIZE];
+        buf[0] = 0;
 
-        /** Special handling for string fields */
-        if (pdb->dbr_field_type == DBR_STRING) {
-            char buf[MAX_STRING_SIZE];
-            buf[0] = 0;
-
-            long req = sizeof(buf);
-            if ((result = dbGetField(pdb, pdb->dbr_field_type, buf, nullptr, &req, nullptr)) != 0) {
-                printf("DataSourceCA::get: dbGet() failed: %li\n", result);
-                continue;
-            }
-
-            *data.get<std::string>() = buf;
+        long req = sizeof(buf);
+        if ((result = dbGetField(pdb, pdb->dbr_field_type, buf, nullptr, &req, nullptr)) != 0) {
+            printf("DataSourceCA::get: dbGet() failed: %li\n", result);
+            return;
         }
-        else {
-            if ((result = dbGetField(pdb, pdb->dbr_field_type, data.data(), nullptr, nullptr, nullptr)) != 0) {
-                printf("DataSourceCA::get: dbGet() failed: %li\n", result);
-                continue;
-            }
+
+        *data.get<std::string>() = buf;
+    } else {
+        if ((result = dbGetField(pdb, pdb->dbr_field_type, data.data(), nullptr, nullptr, nullptr)) != 0) {
+            printf("DataSourceCA::get: dbGet() failed: %li\n", result);
+            return;
         }
     }
 }
 
-DataSource* createDataSourceCA() {
-    return new DataSourceCA();
-}
+DataSource *createDataSourceCA() { return new DataSourceCA(); }
 
-}
+} // namespace pvsave

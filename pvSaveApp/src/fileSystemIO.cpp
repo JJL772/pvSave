@@ -98,7 +98,7 @@ public:
 
     bool beginRead() override { return openFile(); }
 
-    bool readText(std::vector<std::string> &pvNames, std::vector<Data> &pvValues) {
+    bool readText(std::unordered_map<std::string, Data>& pvs) {
         const char *funcName = "fileSystemIO::readText";
 
         char *lptr = nullptr;
@@ -107,6 +107,16 @@ public:
         int result, line;
         for (result = getline(&lptr, &len, handle_), line = 1; result > 0;
              free(lptr), lptr = nullptr, result = getline(&lptr, &len, handle_), ++line) {
+
+            len = strlen(lptr); /** len is not actually string length */
+
+            /** Strip off delimeter */
+            if (len > 0)
+                lptr[--len] = 0;
+
+            /** Skip empty lines */
+            if (!len)
+                continue;
 
             char *sp = nullptr, *pname = nullptr, *ptype = nullptr, *pval = nullptr;
 
@@ -149,8 +159,7 @@ public:
                 continue;
             }
 
-            pvValues.push_back(value.second);
-            pvNames.push_back(pname);
+            pvs.insert({pname, value.second});
         }
 
         if (result == -1 && errno != 0) {
@@ -160,7 +169,7 @@ public:
         return true;
     }
 
-    bool readData(std::vector<std::string> &pvNames, std::vector<Data> &pvValues) override {
+    bool readData(std::unordered_map<std::string, Data>& pvs) override {
         const char *funcName = "fileSystemIO::readData";
         if (fseek(handle_, 0, SEEK_SET) != 0) {
             printf("%s: fseek failed: %s\n", funcName, strerror(errno));
@@ -168,7 +177,7 @@ public:
 
         switch (type_) {
         case FSIO_TYPE_TEXT:
-            return readText(pvNames, pvValues);
+            return readText(pvs);
         case FSIO_TYPE_JSON: /** TODO: implement me! */
         default:
             break;
@@ -201,7 +210,7 @@ public:
 protected:
     fileSystemIOType type_;
     std::string path_;
-    FILE *handle_;
+    FILE *handle_ = nullptr;
 };
 
 } // namespace pvsave

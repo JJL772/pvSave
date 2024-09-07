@@ -23,7 +23,7 @@ pvSave_ConfigureFileSystemIO("fsio1", "test.sav", "text")
 pvSave_AddPvSetList("test1", "${TOP}/iocBoot/${IOC}/pvlist.pvl", "PFX=myioc")
 pvSave_AddPvSetIO("test1", "fsio1")
 
-pvSave_SetPvSetRestoreStage("test1", "0")
+pvSave_SetPvSetRestoreStage("test1", "1")
 
 
 cd "${TOP}/iocBoot/${IOC}"

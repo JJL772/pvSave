@@ -154,7 +154,7 @@ public:
     }
 #endif
 
-    bool readData(std::vector<std::string> &pvNames, std::vector<Data> &pvValues) override {
+    bool readData(std::unordered_map<std::string, Data>& pvs) override {
         const char *funcName = "HTTPIO::readData";
 
         return false;
