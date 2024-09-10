@@ -161,6 +161,7 @@ public:
 
             pvs.insert({pname, value.second});
         }
+        free(lptr);
 
         if (result == -1 && errno != 0) {
             printf("%s: getline failed: %s\n", funcName, strerror(errno));
