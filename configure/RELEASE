@@ -22,8 +22,8 @@
 # the CONFIG_SITE file.
 
 # Variables and paths to dependent modules:
-PVXS_MODULE_VERSION=
-PVXS = $(EPICS_MODULES)/pvxs/$(PVXS_MODULE_VERSION)
+#PVXS_MODULE_VERSION=
+#PVXS = $(EPICS_MODULES)/pvxs/$(PVXS_MODULE_VERSION)
 
 # If using the sequencer, point SNCSEQ at its top directory:
 #SNCSEQ = $(MODULES)/seq-ver
