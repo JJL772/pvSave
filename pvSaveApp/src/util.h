@@ -22,3 +22,13 @@ public:
             dbScanUnlock(pdb_);
     }
 };
+
+/**
+ * Performs a trace log. If level is lower than the trace level, then we do nothing.
+ */
+static void traceLog(int level, const char* fmt, ...);
+
+/**
+ * Returns the current trace level
+ */
+static int traceLevel();

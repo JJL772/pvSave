@@ -108,7 +108,7 @@ public:
         for (result = getline(&lptr, &len, handle_), line = 1; result > 0;
              free(lptr), lptr = nullptr, result = getline(&lptr, &len, handle_), ++line) {
 
-            len = strlen(lptr); /** len is not actually string length */
+            len = strlen(lptr); /** len is not actually string length, it's buffer length */
 
             /** Strip off delimeter */
             if (len > 0)

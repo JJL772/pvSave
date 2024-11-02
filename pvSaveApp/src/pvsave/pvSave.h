@@ -32,12 +32,13 @@ namespace pvsave {
         uint64_t,
         float,
         double,
-        std::string>;
+        std::string
+    >;
 
 
     /**
-     * Abstract interface implemented by all data source 'plugins'
-     * Data sources provided PV data from an arbitrary backend such as the IOC DB, ChannelAccess or PVXS. 
+     * Abstract interface implemented by all data sources
+     * Data sources provide PV data from an arbitrary backend such as the IOC DB, ChannelAccess or PVXS.
      */
     class DataSource {
     public:

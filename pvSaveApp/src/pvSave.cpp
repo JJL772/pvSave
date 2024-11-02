@@ -5,6 +5,7 @@
 #include <vector>
 #include <list>
 #include <memory>
+#include <stdio.h>
 
 #include "pvsave/pvSave.h"
 
@@ -24,6 +25,8 @@ constexpr int MAX_LINE_LENGTH = 1024;
 
 static int configuredThreadPriority = epicsThreadPriorityLow;
 static epicsThreadId threadId = 0;
+
+static int traceLevel = 0;
 
 /** Global list of IO backend instances */
 std::unordered_map<std::string, pvsave::pvSaveIO *> &pvsave::ioBackends() {
@@ -60,7 +63,7 @@ struct MonitorSet {
 std::unordered_map<std::string, std::shared_ptr<MonitorSet>> monitorSets;
 
 /**
- * \brief Represents a PV data provider
+ * \brief Represents a PV save context
  */
 class pvSaveContext {
 public:
