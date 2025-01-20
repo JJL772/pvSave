@@ -100,7 +100,7 @@ public:
                 printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
             }
 
-            if (fprintf(handle_, "%s%s\n", line, i != pvCount-1 ? "," : "") < 0) {
+            if (fprintf(handle_, "\"%s\"%s\n", line, i != pvCount-1 ? "," : "") < 0) {
                 printf("%s: fprintf failed: %s\n", funcName, strerror(errno));
             }
         }
@@ -239,28 +239,23 @@ public:
         } jsonReadState {pvs};
 
         yajl_callbacks cb {
-            .yajl_boolean = [](void* c, int value) -> int {
-                auto pc = static_cast<JsonReadState*>(c);
-                if (!pc->skip)
-                    pc->pvs.insert({pc->curPv, bool(value)});
-                return 1;
-            },
-            .yajl_integer = [](void* c, long long value) -> int {
-                auto pc = static_cast<JsonReadState*>(c);
-                if (!pc->skip)
-                    pc->pvs.insert({pc->curPv, value});
-                return 1;
-            },
-            .yajl_double = [](void* c, double value) -> int {
-                auto pc = static_cast<JsonReadState*>(c);
-                if (!pc->skip)
-                    pc->pvs.insert({pc->curPv, value});
-                return 1;
-            },
             .yajl_string = [](void* c, const unsigned char* value, size_t l) -> int {
                 auto pc = static_cast<JsonReadState*>(c);
-                if (!pc->skip)
-                    pc->pvs.insert({pc->curPv, std::string((const char*)value,l)});
+                if (!pc->skip) {
+                    auto* pstr = const_cast<unsigned char*>(value);
+                    // SUCKS!! avoid copy, directly modify string...
+                    auto c = *(pstr + l);
+                    *(pstr + l) = 0;
+                    auto result = dataParseString((const char*)pstr, pc->type);
+                    *(pstr + l) = c;
+
+                    if (!result.first) {
+                        printf("%s: Unable to parse data for %s\n", funcName, pc->curPv.c_str());
+                    }
+                    else {
+                        pc->pvs.insert({pc->curPv, result.second});
+                    }
+                }
                 return 1;
             },
             .yajl_map_key = [](void* c, const unsigned char* key, size_t l) -> int {
@@ -276,7 +271,7 @@ public:
                     pc->skip = true; // Skip if errored
                 }
                 else {
-                    pc->curPv[sep] = 0;
+                    pc->curPv.erase(sep);
                     auto tc = pvsave::typeCodeFromString(pc->curPv.c_str()+sep+1);
                     if (!tc.first) {
                         printf("%s: Unknown type code %s\n", funcName, pc->curPv.c_str()+sep+1);

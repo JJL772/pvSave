@@ -383,7 +383,7 @@ bool pvsave::dataToString(const Data& data, char* outBuf, size_t bufLen) {
     case ETypeCode::DOUBLE:
         snprintf(outBuf, bufLen, "%.17g", data.value<double>()); break;
     case ETypeCode::STRING:
-        snprintf(outBuf, bufLen, "\"%s\"", data.value<std::string>().c_str());
+        snprintf(outBuf, bufLen, "%s", data.value<std::string>().c_str());
         outBuf[bufLen-1] = 0;
         break;
     default:
