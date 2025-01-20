@@ -1,9 +1,0 @@
-- Optimize file parsing and saving. Doing way too many allocations, don't want to fragment heap space too much.
-
-- Need to profile this whole thing. Probably use VTune?
-
-- Unit tests to confirm reliability of variant and such
-
-- C++11 support. sticking with C++14 for now because of template annoyances
-
-- Implement loading PV list from file
