@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #include "pvsave/pvSave.h"
+#include "common.h"
 
 #include "epicsAlgorithm.h"
 #include "epicsExport.h"
@@ -19,14 +20,18 @@
 #include "iocsh.h"
 #include "macLib.h"
 #include "epicsTime.h"
+#include "dbScan.h"
 #include "macLib.h"
+
+using namespace pvsave;
 
 constexpr int MAX_LINE_LENGTH = 1024;
 
-static int configuredThreadPriority = epicsThreadPriorityLow;
-static epicsThreadId threadId = 0;
+static int s_configuredThreadPriority = epicsThreadPriorityLow;
+static epicsThreadId s_threadId = 0;
 
-static int traceLevel = 0;
+static epicsTimeStamp s_lastProcTime;
+static int s_lastStatus;
 
 /** Global list of IO backend instances */
 std::unordered_map<std::string, pvsave::pvSaveIO *> &pvsave::ioBackends() {
@@ -40,6 +45,14 @@ pvsave::DataSource* pvsave::dataSource() {
         s = createDataSourceCA();
     }
     return s;
+}
+
+/**
+ * Guard mutex for the context list
+ */
+epicsMutex& contextGuard() {
+    static epicsMutex mutex;
+    return mutex;
 }
 
 /**
@@ -57,17 +70,19 @@ struct MonitorSet {
     int stage;
     std::vector<pvsave::pvSaveIO *> io;
     std::vector<std::string> pvList;
-    class pvSaveContext *context;
+    class SaveContext *context;
 };
 
 std::unordered_map<std::string, std::shared_ptr<MonitorSet>> monitorSets;
 
 /**
- * \brief Represents a PV save context
+ * \brief pvSave Context
+ * Contexts are actual instantiations of monitor sets and contain runtime specific data
+ * such as last processed time, connected channels, etc.
  */
-class pvSaveContext {
+class SaveContext {
 public:
-    pvSaveContext(std::shared_ptr<MonitorSet> set)
+    SaveContext(std::shared_ptr<MonitorSet> set)
         : monitorSet_(set) {
         monitorSet_->context = this;
     }
@@ -80,6 +95,8 @@ public:
     }
 
     bool save() {
+        lastStatus_ = 0;
+
         std::vector<pvsave::Data> data;
         data.resize(channels_.size());
         for (size_t i = 0; i < channels_.size(); ++i) {
@@ -91,15 +108,18 @@ public:
             if (io->flags() & pvsave::pvSaveIO::Write) {
                 if (!io->beginWrite()) {
                     printf("pvSave: io->beginWrite: save failed\n");
+                    lastStatus_ = 1;
                     continue;
                 }
 
                 if (!io->writeData(channels_, data, data.size())) {
                     printf("pvSave: io->writeData: save failed\n");
+                    lastStatus_ = 1;
                     /* Fallthrough as we want the IO handler to do cleanup */
                 }
 
                 if (!io->endWrite()) {
+                    lastStatus_ = 1;
                     printf("pvSave: io->endWrite: save failed\n");
                 }
             }
@@ -111,6 +131,8 @@ public:
     bool restore(pvsave::pvSaveIO *io) {
         if (!(io->flags() & pvsave::pvSaveIO::Read))
             return false;
+
+        printf("Restoring from %s\n", monitorSet_->name.c_str());
 
         if (!io->beginRead()) {
             printf("pvSave: io->beginRead: restore failed\n");
@@ -129,8 +151,9 @@ public:
 
         for (size_t i = 0; i < channels_.size(); ++i) {
             auto it = pvs.find(channels_[i].channelName);
-            if (it == pvs.end())
+            if (it == pvs.end()) {
                 continue; /* PV not found in save data */
+            }
             pvsave::dataSource()->put(channels_[i], it->second);
         }
 
@@ -147,7 +170,7 @@ public:
         }
 
         if (!restoredAny) {
-            printf("%s: restore failed: no backend was able to restore\n", "pvSaveContext::restore");
+            printf("%s: restore failed: no backend was able to restore\n", "SaveContext::restore");
             return false;
         }
         return true;
@@ -159,9 +182,10 @@ public:
     /** Returns the monitor set we were configured with */
     inline const std::shared_ptr<MonitorSet> &monitorSet() const { return monitorSet_; }
 
-    static std::list<pvSaveContext> saveContexts;
+    static std::vector<SaveContext> saveContexts;
 
     epicsTimeStamp lastProc_ = {0,0};
+    int lastStatus_ = 0;
 
 protected:
     std::shared_ptr<MonitorSet> monitorSet_;
@@ -169,7 +193,7 @@ protected:
     bool pendingRestore_ = false;
 };
 
-std::list<pvSaveContext> pvSaveContext::saveContexts;
+std::vector<SaveContext> SaveContext::saveContexts;
 
 static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& list) {
     MAC_HANDLE* handle = nullptr;
@@ -188,13 +212,13 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
     for (char** p = pairs; *p; p += 2)
         macPutValue(handle, *p, *(p+1));
 
-    int result = 0;
-    do {
+    char* result = NULL;
+    for(;;) {
         char buf[MAX_LINE_LENGTH];
-        size_t len = sizeof(buf);
         char* line = buf;
-        result = getline(&line, &len, fp);
-        if (result <= 0) break;
+
+        result = fgets(buf, sizeof(buf), fp);
+        if (result == NULL) break;
 
         /** Find start of comment and NULL terminate there */
         char* s = nullptr;
@@ -225,7 +249,7 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
             printf("Adding '%s'\n", l);
         }
 
-    } while(result >= 0);
+    }
 
     macDeleteHandle(handle);
     free(pairs);
@@ -289,7 +313,8 @@ static void pvSave_AddPvSetIOCallFunc(const iocshArgBuf *buf) {
         return;
     }
 
-    if (auto it = pvsave::ioBackends().find(ioName); it != pvsave::ioBackends().end()) {
+    auto it = pvsave::ioBackends().find(ioName);
+    if (it != pvsave::ioBackends().end()) {
         ms->io.push_back(it->second);
     } else {
         printf("%s: No such IO backend '%s'\n", funcName, ioName);
@@ -375,7 +400,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf *buf) {
             mset->stage = initHookAfterIocRunning;
             break;
         default:
-            printf("%s: invalid stage '%d': 0 or 1 allowed\n", funcName, st);
+            printf("%s: invalid stage '%d': 0, 1 or 2 allowed\n", funcName, st);
             iocshSetError(-1);
             return;
         }
@@ -389,7 +414,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf *buf) {
         } else if (!epicsStrCaseCmp(stage, "AfterIocRunning")) {
             mset->stage = initHookAfterIocRunning;
         } else {
-            printf("%s: invalid stage '%s': 'AfterInitDevSup' (0), 'AfterInitDatabase' (1) allowed\n", funcName, stage);
+            printf("%s: invalid stage '%s': 'AfterInitDevSup' (0), 'AfterInitDatabase' (1), 'AfterIocRunning' (2) allowed\n", funcName, stage);
             iocshSetError(-1);
         }
     }
@@ -447,26 +472,26 @@ static void pvSave_SetThreadPriorityCallFunc(const iocshArgBuf* buf) {
     constexpr const char* funcName = "pvSave_SetThreadPriority";
     const char* prio = buf[0].sval;
 
-    if (threadId) {
+    if (s_threadId) {
         printf("%s: thread is already created; this function must be called before iocInit!\n", funcName);
         iocshSetError(-1);
         return;
     }
 
     if (!strcmp(prio, "low")) {
-        configuredThreadPriority = epicsThreadPriorityLow;
+        s_configuredThreadPriority = epicsThreadPriorityLow;
     }
     else if (!strncmp(prio, "med", 3)) {
-        configuredThreadPriority = epicsThreadPriorityMedium;
+        s_configuredThreadPriority = epicsThreadPriorityMedium;
     }
     else if(!strcmp(prio, "high")) {
-        configuredThreadPriority = epicsThreadPriorityHigh;
+        s_configuredThreadPriority = epicsThreadPriorityHigh;
     }
     else if(!strcmp(prio, "max")) {
-        configuredThreadPriority = epicsThreadPriorityMax;
+        s_configuredThreadPriority = epicsThreadPriorityMax;
     }
     else if(!strcmp(prio, "min")) {
-        configuredThreadPriority = epicsThreadPriorityMin;
+        s_configuredThreadPriority = epicsThreadPriorityMin;
     }
     else {
         printf("%s: Unknown thread priority '%s': must be low, med, high, max or min\n", funcName, prio);
@@ -475,12 +500,60 @@ static void pvSave_SetThreadPriorityCallFunc(const iocshArgBuf* buf) {
     }
 }
 
+epicsTimeStamp pvsave::lastProcTime(int ms) {
+    if (ms < 0) {
+        return s_lastProcTime;
+    }
+    else if (ms < SaveContext::saveContexts.size()) {
+        return SaveContext::saveContexts[ms].lastProc_;
+    }
+    else {
+        return {};
+    }
+}
+
+int pvsave::lastStatus(int ms) {
+    if (ms < 0) {
+        return s_lastStatus;
+    }
+    else if (ms < SaveContext::saveContexts.size()) {
+        return SaveContext::saveContexts[ms].lastStatus_;
+    }
+    else {
+        return 0;
+    }
+}
+
+void pvsave::saveAllNow() {
+    epicsGuard<epicsMutex> guard(contextGuard());
+
+    epicsTimeStamp now;
+    epicsTimeGetCurrent(&now);
+
+    s_lastStatus = 0;
+    for (auto& context: SaveContext::saveContexts) {
+        if (!context.save()) {
+            s_lastStatus = 1;
+            printf("Unable to save!\n");
+        }
+        context.lastProc_ = now;
+    }
+
+    /* Kick off I/O scan for status records */
+    scanIoRequest(*statusIoScan());
+}
+
+static void pvSave_SaveCallFunc(const iocshArgBuf* buf) {
+    printf("pvSave: Forcing save...\n");
+    pvsave::saveAllNow();
+}
+
 static void pvSaveThreadProc(void *data) {
     epicsTimeStamp startTime;
     epicsTimeGetCurrent(&startTime);
 
     double sleepTime = 30.f;
-    for (auto &context : pvSaveContext::saveContexts)
+    for (auto &context : SaveContext::saveContexts)
         sleepTime = epicsMin(context.monitorSet()->period, sleepTime);
 
     while (1) {
@@ -490,7 +563,9 @@ static void pvSaveThreadProc(void *data) {
         epicsTimeStamp now;
         epicsTimeGetCurrent(&now);
 
-        for (auto &context : pvSaveContext::saveContexts) {
+        epicsGuard<epicsMutex> guard(contextGuard());
+        s_lastStatus = 0;
+        for (auto &context : SaveContext::saveContexts) {
             double diff;
             if ((diff = epicsTimeDiffInSeconds(&now, &context.lastProc_)) < context.monitorSet()->period) {
                 /* Compute how long we should sleep for next iteration. This isn't going to be perfect though */
@@ -498,12 +573,16 @@ static void pvSaveThreadProc(void *data) {
                 continue;
             }
 
-            printf("pvSave: saving...\n");
-            if (!context.save())
+            if (!context.save()) {
                 printf("pvSave: save failed\n");
+                s_lastStatus = 1;
+            }
             context.lastProc_ = now;
             sleepTime = epicsMin(sleepTime, context.monitorSet()->period);
         }
+
+        /* Kick off I/O scan for status records */
+        scanIoRequest(*statusIoScan());
     }
 }
 
@@ -511,35 +590,36 @@ void pvsInitHook(initHookState state) {
     /* Create the contexts and init everything else */
     if (state == initHookAtIocBuild) {
         for (auto &ms : monitorSets) {
-            pvSaveContext::saveContexts.emplace_back(ms.second);
+            SaveContext::saveContexts.emplace_back(ms.second);
         }
     }
     /* Kick off discovery of PVs */
     else if (state == initHookAfterInitDevSup) {
         printf("pvSave: Discovering PVs\n");
-        for (auto &context : pvSaveContext::saveContexts)
+        for (auto &context : SaveContext::saveContexts)
             context.init();
 
         /* Pass 0 restore */
-        for (auto &context : pvSaveContext::saveContexts) {
+        for (auto &context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
     } else if (state == initHookAfterInitDatabase) {
         /* Pass 1 restore */
-        for (auto &context : pvSaveContext::saveContexts) {
+        for (auto &context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
     } else if (state == initHookAfterIocRunning) {
-        for (auto &context : pvSaveContext::saveContexts) {
+        /* Pass 2 restore */
+        for (auto &context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
 
         epicsThreadOpts opts;
         opts.joinable = false;
-        opts.priority = configuredThreadPriority;
+        opts.priority = s_configuredThreadPriority;
         opts.stackSize = epicsThreadStackMedium;
         epicsThreadCreateOpt("pvSave", pvSaveThreadProc, nullptr, &opts);
     }
@@ -613,6 +693,12 @@ void registerFuncs() {
         static const iocshArg* args[] = {&arg0};
         static iocshFuncDef funcDef = {"pvSave_SetThreadPriority", 1, args};
         iocshRegister(&funcDef, pvSave_SetThreadPriorityCallFunc);
+    }
+
+    /* psSave_Save */
+    {
+        static iocshFuncDef funcDef = {"pvSave_Save", 0, NULL};
+        iocshRegister(&funcDef, pvSave_SaveCallFunc);
     }
 
     initHookRegister(pvsInitHook);

@@ -21,6 +21,7 @@ pvSave_SRCS += pvSaveIO.cpp
 pvSave_SRCS += fileSystemIO.cpp
 pvSave_SRCS += serialize.cpp
 pvSave_SRCS += dataSourceDb.cpp
+pvSave_SRCS += statusControl.cpp
 
 pvSave_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)

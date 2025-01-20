@@ -1,2 +1,9 @@
+# iocsh registration
 registrar(registerFuncs)
 registrar(registerFSIO)
+
+# Device support
+device(longin, INST_IO, devSaveStatusDevSup, "pvSaveStatus")
+device(mbbi, INST_IO, devSaveStatusMbbiDevSup, "pvSaveStatusMbbi")
+device(longout, INST_IO, devSaveControlDevSup, "pvSaveControl")
+device(stringin, INST_IO, devSaveStatusStrDevSup, "pvSaveStatusStr")

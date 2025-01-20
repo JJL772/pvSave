@@ -9,6 +9,7 @@
 #include "epicsStdio.h"
 #include "epicsString.h"
 #include "iocsh.h"
+#include "yajl_parse.h"
 
 #include "pvsave/pvSave.h"
 #include "pvsave/serialize.h"
@@ -19,6 +20,10 @@ namespace pvsave {
 
 enum fileSystemIOType { FSIO_TYPE_TEXT, FSIO_TYPE_JSON };
 
+/**
+ * \brief Implementation of the file system IO backend
+ * Supports an autosave-like text format and JSON parsed using yajl
+ */
 class fileSystemIO : public pvsave::pvSaveIO {
 public:
     fileSystemIO(const char *name, const char *filePath, fileSystemIOType type)
@@ -28,7 +33,7 @@ public:
 
     bool openFile() {
         if (!handle_)
-            handle_ = fopen(path_.c_str(), "a+b"); /** Don't truncate file on load, but open in RDWR mode */
+            handle_ = fopen(path_.c_str(), "a+b"); // Don't truncate file on load, but open in RDWR mode
 
         if (!handle_) {
             printf("fileSystemIO::beginWrite: Failed to open '%s': %s\n", path_.c_str(), strerror(errno));
@@ -39,10 +44,13 @@ public:
 
     bool beginWrite() override { return openFile(); }
 
+    /**
+     * \brief Save implementation of autosave-like .SAV files
+     */
     bool saveText(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount) {
         const char *funcName = "fileSystemIO::saveText";
-        for (int i = 0; i < pvCount; ++i) {
-            /** PV name */
+        for (size_t i = 0; i < pvCount; ++i) {
+            // PV name
             if (fputs(pvNames[i].channelName.c_str(), handle_) < 0) {
                 printf("%s: fputs failed: %s\n", funcName, strerror(errno));
                 return false;
@@ -51,11 +59,11 @@ public:
 
             const auto &value = pvValues[i];
 
-            /** Type string */
+            // Type string
             fputs(pvsave::typeCodeString(value.type_code()), handle_);
             fputc(' ', handle_);
 
-            /** Value */
+            // Value
             char line[MAX_LINE_LENGTH];
             line[0] = 0;
             if (!dataToString(pvValues[i], line, sizeof(line))) {
@@ -65,6 +73,38 @@ public:
             fputs(line, handle_);
             fputc('\n', handle_);
         }
+        return true;
+    }
+
+    /**
+     * \brief Save implementation for JSON
+     */
+    bool saveJson(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data>& pvValues, size_t pvCount) {
+        const char *funcName = "fileSystemIO::saveJson";
+        fputs("{\n", handle_);
+        for (size_t i = 0; i < pvCount; ++i) {
+            pindent(handle_, 1);
+
+            const auto &value = pvValues[i];
+
+            // PV name and type
+            if (fprintf(handle_, "\"%s#%s\": ", pvNames[i].channelName.c_str(), pvsave::typeCodeString(value.type_code())) < 0) {
+                printf("%s: fputs failed: %s\n", funcName, strerror(errno));
+                return false;
+            }
+
+            // Value
+            char line[MAX_LINE_LENGTH];
+            line[0] = 0;
+            if (!dataToString(pvValues[i], line, sizeof(line))) {
+                printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
+            }
+
+            if (fprintf(handle_, "%s%s\n", line, i != pvCount-1 ? "," : "") < 0) {
+                printf("%s: fprintf failed: %s\n", funcName, strerror(errno));
+            }
+        }
+        fputs("}\n", handle_);
         return true;
     }
 
@@ -83,7 +123,8 @@ public:
         switch (type_) {
         case FSIO_TYPE_TEXT:
             return saveText(pvNames, pvValues, pvCount);
-        case FSIO_TYPE_JSON: /** TODO: implement me! */
+        case FSIO_TYPE_JSON:
+            return saveJson(pvNames, pvValues, pvCount);
         default:
             break;
         }
@@ -98,49 +139,56 @@ public:
 
     bool beginRead() override { return openFile(); }
 
+    /**
+     * \brief Implementation of autosave-like text format for SAV files
+     */
     bool readText(std::unordered_map<std::string, Data>& pvs) {
         const char *funcName = "fileSystemIO::readText";
+
+        const size_t bl = 16384;
+        char* buf = (char*)malloc(bl);
 
         char *lptr = nullptr;
         size_t len = 0;
 
-        int result, line;
-        for (result = getline(&lptr, &len, handle_), line = 1; result > 0;
-             free(lptr), lptr = nullptr, result = getline(&lptr, &len, handle_), ++line) {
+        int line;
+        for (lptr = fgets(buf, bl, handle_), line = 1; lptr != nullptr;
+             lptr = nullptr, lptr = fgets(buf, bl, handle_), ++line) {
 
-            len = strlen(lptr); /** len is not actually string length, it's buffer length */
+            len = strlen(lptr); // len is not actually string length, it's buffer length
 
-            /** Strip off delimeter */
+            // Strip off delimeter
             if (len > 0)
                 lptr[--len] = 0;
 
-            /** Skip empty lines */
+            // Skip empty lines
             if (!len)
                 continue;
 
             char *sp = nullptr, *pname = nullptr, *ptype = nullptr, *pval = nullptr;
 
-            /** PV name */
+            // PV name
             pname = strtok_r(lptr, " ", &sp);
             if (!pname) {
                 printf("%s: file %s, line %d: missing PV name\n", funcName, path_.c_str(), line);
                 continue;
             }
 
-            /** PV type */
+            // PV type
             ptype = strtok_r(nullptr, " ", &sp);
             if (!ptype) {
                 printf("%s: file %s, line %d: missing PV type\n", funcName, path_.c_str(), line);
                 continue;
             }
 
-            /** PV value */
+            // PV value
             pval = strtok_r(nullptr, " ", &sp);
             if (!pval) {
                 printf("%s: file %s, line %d: missing PV value\n", funcName, path_.c_str(), line);
                 continue;
             }
 
+            // Determine and validate type
             auto typeCode = pvsave::typeCodeFromString(ptype);
             if (!typeCode.first) {
                 printf("%s: file %s, line %d: unknown type name '%s'\n", funcName, path_.c_str(), line, ptype);
@@ -153,6 +201,7 @@ public:
                 continue;
             }
 
+            // Parse the data into a variant
             auto value = pvsave::dataParseString(parsedValue.c_str(), typeCode.second);
             if (!value.first) {
                 printf("%s: file %s, line %d: unable to parse value '%s'\n", funcName, path_.c_str(), line, pval);
@@ -161,13 +210,112 @@ public:
 
             pvs.insert({pname, value.second});
         }
-        free(lptr);
 
-        if (result == -1 && errno != 0) {
+        if (!lptr && errno != 0 && errno != EOF) {
             printf("%s: getline failed: %s\n", funcName, strerror(errno));
             return false;
         }
         return true;
+    }
+
+    /**
+     * \brief Implementation of JSON reading using yajl
+     */
+    bool readJson(std::unordered_map<std::string, Data>& pvs) {
+        static const char* funcName = "fileSystemIO::readJson";
+        bool success = true;
+
+        yajl_alloc_funcs af {
+            .malloc = [](void* c, size_t s) { return malloc(s); },
+            .realloc = [](void* c, void* p, size_t s) { return realloc(p, s); },
+            .free = [](void* c, void* p) { free(p); }
+        };
+
+        struct JsonReadState {
+            std::unordered_map<std::string, Data>& pvs;
+            ETypeCode type;
+            std::string curPv;
+            bool skip;
+        } jsonReadState {pvs};
+
+        yajl_callbacks cb {
+            .yajl_boolean = [](void* c, int value) -> int {
+                auto pc = static_cast<JsonReadState*>(c);
+                if (!pc->skip)
+                    pc->pvs.insert({pc->curPv, bool(value)});
+                return 1;
+            },
+            .yajl_integer = [](void* c, long long value) -> int {
+                auto pc = static_cast<JsonReadState*>(c);
+                if (!pc->skip)
+                    pc->pvs.insert({pc->curPv, value});
+                return 1;
+            },
+            .yajl_double = [](void* c, double value) -> int {
+                auto pc = static_cast<JsonReadState*>(c);
+                if (!pc->skip)
+                    pc->pvs.insert({pc->curPv, value});
+                return 1;
+            },
+            .yajl_string = [](void* c, const unsigned char* value, size_t l) -> int {
+                auto pc = static_cast<JsonReadState*>(c);
+                if (!pc->skip)
+                    pc->pvs.insert({pc->curPv, std::string((const char*)value,l)});
+                return 1;
+            },
+            .yajl_map_key = [](void* c, const unsigned char* key, size_t l) -> int {
+                auto pc = static_cast<JsonReadState*>(c);
+                pc->curPv.assign((const char*)key, l);
+                pc->skip = false;
+
+                // Types are specified in the PV name, denoted by a # prefix. i.e. myCool:PV:Or:Something#uint32_t
+                // this could probably be implemented better, but this is the cheapest way to do it
+                auto sep = pc->curPv.find_last_of('#');
+                if (sep == pc->curPv.npos) {
+                    printf("%s: Missing typecode for PV '%s'\n", funcName, key);
+                    pc->skip = true; // Skip if errored
+                }
+                else {
+                    pc->curPv[sep] = 0;
+                    auto tc = pvsave::typeCodeFromString(pc->curPv.c_str()+sep+1);
+                    if (!tc.first) {
+                        printf("%s: Unknown type code %s\n", funcName, pc->curPv.c_str()+sep+1);
+                        pc->skip = true; // Skip if errored
+                    }
+                    else
+                        pc->type = tc.second;
+                }
+                return 1;
+            }
+        };
+
+        yajl_handle yh = yajl_alloc(&cb, &af, &jsonReadState);
+        if (!yh) {
+            printf("%s: Unable to alloc yajl handle!\n", funcName);
+            return false;
+        }
+
+        // Alloc a working buffer in the heap (keep stack usage low!)
+        size_t bs = 16384, nread = 0;
+        unsigned char* rb = (unsigned char*)malloc(bs);
+
+        while ((nread = fread(rb, 1, bs, handle_)) > 0) {
+            if (yajl_parse(yh, rb, nread) != yajl_status_ok) {
+                auto* errstr = yajl_get_error(yh, 1, rb, nread);
+                printf("%s: yajl_parse returned error: %s\n", funcName, errstr);
+                free(errstr);
+                success = false;
+                goto done;
+            }
+        }
+
+        // Flush out any remaining bytes
+        yajl_complete_parse(yh);
+
+    done:
+        yajl_free(yh);
+        free(rb);
+        return success;
     }
 
     bool readData(std::unordered_map<std::string, Data>& pvs) override {
@@ -180,6 +328,7 @@ public:
         case FSIO_TYPE_TEXT:
             return readText(pvs);
         case FSIO_TYPE_JSON: /** TODO: implement me! */
+            return readJson(pvs);
         default:
             break;
         }

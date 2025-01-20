@@ -13,6 +13,16 @@ namespace pvsave {
     class DataSource;
 
     /**
+     * \brief Status error codes. These are returned by the I/O backends when a save fails
+     */
+    enum IOErrorCodes {
+        S_io_ok = 0,              //< No error
+        S_io_err,                 //< Generic IO error
+        S_io_noAccess,            //< EACCESS (No access)
+        S_io_noEntry,             //< ENOENT (when reading)
+    };
+
+    /**
      * \brief Returns a reference to the global list of IO backend instances.
      * In general, this is for internal use and is automatically called by the pvSaveIO constructor.
      */
@@ -93,6 +103,9 @@ namespace pvsave {
             Write   = (1<<1),   /** This supports data writes */
         };
 
+        /**
+         * \brief Returns the flags this IO backend supports
+         */
         virtual uint32_t flags() const = 0;
 
         /** 
@@ -114,7 +127,6 @@ namespace pvsave {
         * \returns False if failed
         */
         virtual bool endWrite() = 0;
-
 
         /**
         * \brief Begins a read transaction

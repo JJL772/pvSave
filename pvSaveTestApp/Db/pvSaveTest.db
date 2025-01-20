@@ -1,9 +1,53 @@
-record(longin, "$(PFX):test001") {
+record(longin, "$(P)test001") {
     field(LOPR, "5")
     field(HOPR, "100")
     field(VAL, "2")
 }
 
-record(stringin, "$(PFX):test002") {
+record(stringin, "$(P)test002") {
     field(VAL, "hello")
+}
+
+record(aai, "$(P)test_aai") {
+
+}
+
+record(longin, "$(P)test_longin") {
+    field(LOPR, "5")
+    field(HOPR, "100")
+    field(VAL, "2")
+}
+
+record(longout, "$(P)test_longout") {
+    field(LOPR, "-5")
+    field(HOPR, "50")
+    field(VAL, "10")
+}
+
+record(ai, "$(P)test_ai") {
+    field(LOW, "1")
+    field(HIGH, "10")
+    field(LOLO, "0")
+    field(HIHI, "11")
+    field(VAL, "5")
+}
+
+record(ao, "$(P)test_ao") {
+    field(LOW, "1")
+    field(HIGH, "10")
+    field(LOLO, "0")
+    field(HIHI, "11")
+    field(VAL, "5")
+}
+
+record(int64in, "$(P)test_int64in") {
+    field(LOPR, "2")
+    field(HOPR, "150")
+    field(VAL, "25")
+}
+
+record(int64in, "$(P)test_int64out") {
+    field(LOPR, "2")
+    field(HOPR, "150")
+    field(VAL, "25")
 }

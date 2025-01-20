@@ -1,8 +1,9 @@
 # test
 
-$(PFX):test001.VAL #qu
-$(PFX):test002.VAL# stuff
-$(PFX):test003.VAL
-  $(PFX):test003.VAL # amogus
-$(PFX):test004.VAL # another
+$(P)test_int64in.VAL #qu
+$(P)test_longout.VAL# stuff
+$(P)test_ai.VAL
+  $(P)test_ao.VAL # cool stuff !!!!
+$(P)test_longin.VAL # another
 # comment test
+$(P)test_aai

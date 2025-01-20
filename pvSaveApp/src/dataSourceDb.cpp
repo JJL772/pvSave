@@ -3,9 +3,10 @@
 #include "dbAddr.h"
 #include "dbCommon.h"
 #include "dbStaticLib.h"
+#include "epicsStdio.h"
 
 #include "pvsave/pvSave.h"
-#include "util.h"
+#include "common.h"
 
 namespace pvsave {
 
@@ -66,7 +67,11 @@ Data dataFromDbfType(short type) {
         d.construct<double>();
         return d;
     case DBF_ENUM:
+        d.construct<int>();
+        return d;
     case DBF_MENU:
+        d.construct<int>();
+        return d;
     case DBF_DEVICE:
     case DBF_INLINK:
     case DBF_OUTLINK:
@@ -84,15 +89,18 @@ void DataSourceCA::connect(const std::vector<std::string> &pvList, std::vector<C
             printf("Failed to connect channel %s\n", pv.c_str());
             addrs_[i] = {};
         } else {
-            printf("Connected %s\n", pv.c_str());
+            //printf("Connected %s\n", pv.c_str());
             dbInitEntry(pdbbase, &addrs_[i].entry);
             outChannels.push_back({pv, &addrs_[i]});
         }
     }
+    printf("Connected %zu out of %zu PVs (%2.f%%)\n", outChannels.size(), pvList.size(), 100.f * float(outChannels.size()) / pvList.size());
 }
 
 void DataSourceCA::put(const Channel &channel, const Data &data) {
     auto *pdb = static_cast<dbAddr *>(channel.contextData);
+
+    printf("put attempt for %s\n", channel.channelName.c_str());
 
     /** Channel not connected or no data to restore */
     if (!pdb || data.is<void>()) {

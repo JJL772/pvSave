@@ -1,0 +1,30 @@
+
+# Current status of all monitor sets
+record(mbbi, "$(P)PVS_Status") {
+    field(DESC, "Global status")
+    field(DTYP, "pvSaveStatusMbbi")
+    field(INP, "@saveStatus")
+    field(SCAN, "I/O Intr")
+    field(ZRVL, "0")
+    field(ZRST, "Ok")
+    field(ONVL, "1")
+    field(ONST, "Error")
+
+    field(ONSV, "MAJOR")
+    field(ZRSV, "NO_ALARM")
+}
+
+# Time at which the PVs were last saved, in a pretty format!
+record(stringin, "$(P)PVS_LastSaved") {
+    field(DESC, "Time of last save")
+    field(DTYP, "pvSaveStatusStr")
+    field(SCAN, "I/O Intr")
+    field(INP,  "@lastSaved")
+}
+
+# Force save of all monitor sets
+record(longout, "$(P)PVS_SaveAll"){
+    field(DESC, "Force immediate save")
+    field(DTYP, "pvSaveControl")
+    field(OUT, "@saveAll")
+}

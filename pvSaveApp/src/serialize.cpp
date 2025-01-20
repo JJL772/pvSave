@@ -20,7 +20,8 @@ template<> int parseValue<epicsUInt64>(const char* str, epicsUInt64* out) { retu
 template<> int parseValue<epicsFloat32>(const char* str, epicsFloat32* out) { return epicsParseFloat32(str, out, nullptr); }
 template<> int parseValue<epicsFloat64>(const char* str, epicsFloat64* out) { return epicsParseFloat64(str, out, nullptr); }
 
-// FIXME: these overloads suck and will not work on some platforms.
+// FIXME: these overloads suck and will not work on some platforms. Pointer size check works with RTEMS 6 GCC 13.2.0, probably works on older GCC's too.
+#if __SIZEOF_POINTER__ == 8
 template<> int parseValue<uint64_t>(const char* str, uint64_t* out) {
     *out = strtoul(str, nullptr, 10);
     return errno;
@@ -30,6 +31,7 @@ template<> int parseValue<int64_t>(const char* str, int64_t* out) {
     *out = strtoul(str, nullptr, 10);
     return errno;
 }
+#endif
 
 #if HAVE_PVXS
 
@@ -211,24 +213,24 @@ void pvsave::pindent(FILE* fp, int indent) {
 
 static constexpr struct { const char* name; dbfType type; } STR_TO_DBTYPE[] =
 {
-    { "string", DBF_STRING },
-    { "int8_t", DBF_CHAR },
-    { "uint8_t", DBF_UCHAR },
-    { "int16_t", DBF_SHORT },
-    { "uint16_t", DBF_USHORT },
-    { "int32_t", DBF_LONG },
-    { "uint32_t", DBF_ULONG },
-    { "int64_t", DBF_INT64 },
-    { "uint64_t", DBF_UINT64 },
-    { "float32", DBF_FLOAT },
-    { "float64", DBF_DOUBLE },
-    { "enum", DBF_ENUM },
-    { "menu", DBF_MENU },
-    { "device", DBF_DEVICE },
-    { "inlnk", DBF_INLINK },
-    { "outlnk", DBF_OUTLINK },
-    { "fwdlnk", DBF_FWDLINK },
-    { "noaccess", DBF_NOACCESS }
+    { "string",    DBF_STRING },
+    { "int8_t",    DBF_CHAR },
+    { "uint8_t",   DBF_UCHAR },
+    { "int16_t",   DBF_SHORT },
+    { "uint16_t",  DBF_USHORT },
+    { "int32_t",   DBF_LONG },
+    { "uint32_t",  DBF_ULONG },
+    { "int64_t",   DBF_INT64 },
+    { "uint64_t",  DBF_UINT64 },
+    { "float32",   DBF_FLOAT },
+    { "float64",   DBF_DOUBLE },
+    { "enum",      DBF_ENUM },
+    { "menu",      DBF_MENU },
+    { "device",    DBF_DEVICE },
+    { "inlnk",     DBF_INLINK },
+    { "outlnk",    DBF_OUTLINK },
+    { "fwdlnk",    DBF_FWDLINK },
+    { "noaccess",  DBF_NOACCESS }
 };
 
 static constexpr const char* DBTYPE_TO_STR[] =
@@ -280,11 +282,11 @@ static constexpr const char* TYPECODE_TO_STR[] =
 	"string",   /*STRING,*/
     "float32",  /*FLOAT,*/
     "float64",  /*DOUBLE,*/
-    "", /*POINTER,*/
-    "", /*REFERENCE,*/
-    "", /*CHAR,*/
-    "", /*CSTRING,*/
-	"", /*OTHER,*/
+    "",         /*POINTER,*/
+    "",         /*REFERENCE,*/
+    "",         /*CHAR,*/
+    "",         /*CSTRING,*/
+	"",         /*OTHER,*/
 };
 
 const char* pvsave::typeCodeString(ETypeCode code) {
@@ -381,7 +383,7 @@ bool pvsave::dataToString(const Data& data, char* outBuf, size_t bufLen) {
     case ETypeCode::DOUBLE:
         snprintf(outBuf, bufLen, "%.17g", data.value<double>()); break;
     case ETypeCode::STRING:
-        strncpy(outBuf, data.value<std::string>().c_str(), bufLen);
+        snprintf(outBuf, bufLen, "\"%s\"", data.value<std::string>().c_str());
         outBuf[bufLen-1] = 0;
         break;
     default:

@@ -44,5 +44,12 @@ namespace pvsave {
 
     std::pair<bool, Data> dataParseString(const char* pstring, ETypeCode expected);
 
+    /**
+     * \brief Convert data in a variant to string
+     * \param data Variant
+     * \param outBuf Pointer to the out buffer
+     * \param bufLen Length of the buffer
+     * \returns True to indicate success
+     */
     bool dataToString(const Data& data, char* outBuf, size_t bufLen);
 }
