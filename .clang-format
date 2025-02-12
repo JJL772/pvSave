@@ -6,3 +6,12 @@ IndentWidth: 4
 ColumnLimit: 120
 PackConstructorInitializers: Never
 NamespaceIndentation: None
+LambdaBodyIndentation: OuterScope
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterNamespace: true
+  AfterClass: true
+BreakConstructorInitializers: AfterColon
+AlignAfterOpenBracket: AlwaysBreak
+BracedInitializerIndentWidth: 2
