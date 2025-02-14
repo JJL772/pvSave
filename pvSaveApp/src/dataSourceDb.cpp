@@ -1,10 +1,10 @@
 //////////////////////////////////////////////////////////////////////////////
 // This file is part of 'pvSave'.
-// It is subject to the license terms in the LICENSE.txt file found in the 
-// top-level directory of this distribution and at: 
-//    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-// No part of 'pvSave', including this file, 
-// may be copied, modified, propagated, or distributed except according to 
+// It is subject to the license terms in the LICENSE.txt file found in the
+// top-level directory of this distribution and at:
+//    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+// No part of 'pvSave', including this file,
+// may be copied, modified, propagated, or distributed except according to
 // the terms contained in the LICENSE.txt file.
 //////////////////////////////////////////////////////////////////////////////
 
@@ -14,15 +14,17 @@
 #include "dbStaticLib.h"
 #include "epicsStdio.h"
 
-#include "pvsave/pvSave.h"
 #include "common.h"
+#include "pvsave/pvSave.h"
 
-namespace pvsave {
+namespace pvsave
+{
 
 /**
  * Implements a data source for interacting with EPICS V3 DB
  */
-class DataSourceCA : public DataSource {
+class DataSourceCA : public DataSource
+{
 public:
     bool init() override;
     void connect(const std::vector<std::string> &pvList, std::vector<Channel> &outChannels) override;
@@ -39,7 +41,8 @@ private:
 
 bool DataSourceCA::init() { return true; }
 
-Data dataFromDbfType(short type) {
+Data dataFromDbfType(short type)
+{
     Data d;
     switch (type) {
     case DBF_STRING:
@@ -90,7 +93,8 @@ Data dataFromDbfType(short type) {
     }
 }
 
-void DataSourceCA::connect(const std::vector<std::string> &pvList, std::vector<Channel> &outChannels) {
+void DataSourceCA::connect(const std::vector<std::string> &pvList, std::vector<Channel> &outChannels)
+{
     addrs_.resize(pvList.size());
     for (size_t i = 0; i < pvList.size(); ++i) {
         auto &pv = pvList[i];
@@ -98,15 +102,17 @@ void DataSourceCA::connect(const std::vector<std::string> &pvList, std::vector<C
             printf("Failed to connect channel %s\n", pv.c_str());
             addrs_[i] = {};
         } else {
-            //printf("Connected %s\n", pv.c_str());
+            // printf("Connected %s\n", pv.c_str());
             dbInitEntry(pdbbase, &addrs_[i].entry);
             outChannels.push_back({pv, &addrs_[i]});
         }
     }
-    printf("Connected %zu out of %zu PVs (%2.f%%)\n", outChannels.size(), pvList.size(), 100.f * float(outChannels.size()) / pvList.size());
+    printf("Connected %zu out of %zu PVs (%2.f%%)\n", 
+        outChannels.size(), pvList.size(), 100.f * float(outChannels.size()) / pvList.size());
 }
 
-void DataSourceCA::put(const Channel &channel, const Data &data) {
+void DataSourceCA::put(const Channel &channel, const Data &data)
+{
     auto *pdb = static_cast<dbAddr *>(channel.contextData);
 
     printf("put attempt for %s\n", channel.channelName.c_str());
@@ -116,7 +122,7 @@ void DataSourceCA::put(const Channel &channel, const Data &data) {
         return;
     }
 
-    auto* pctx = static_cast<ContextData*>(channel.contextData);
+    auto *pctx = static_cast<ContextData *>(channel.contextData);
     if (!pctx->entry.pdbbase) {
         dbInitEntryFromAddr(pdb, &pctx->entry);
         dbInitEntry(pdbbase, &pctx->entry);
@@ -140,7 +146,8 @@ void DataSourceCA::put(const Channel &channel, const Data &data) {
     }
 }
 
-void DataSourceCA::get(const Channel &channel, Data &data) {
+void DataSourceCA::get(const Channel &channel, Data &data)
+{
     auto *pdb = static_cast<dbAddr *>(channel.contextData);
     data = dataFromDbfType(pdb->dbr_field_type);
 
@@ -150,7 +157,7 @@ void DataSourceCA::get(const Channel &channel, Data &data) {
 
     /** Special handling for string fields */
     if (pdb->dbr_field_type == DBR_STRING) {
-        char buf[MAX_STRING_SIZE];
+        char buf[MAX_STRING_SIZE + 1];
         buf[0] = 0;
 
         long req = sizeof(buf);

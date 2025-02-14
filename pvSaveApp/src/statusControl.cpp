@@ -35,7 +35,8 @@ using namespace pvsave;
 // Common to all records
 //-------------------------------------------------------------------------//
 
-IOSCANPVT* pvsave::statusIoScan() {
+IOSCANPVT* pvsave::statusIoScan()
+{
     static bool initted = false;
     static IOSCANPVT ios;
     if (!initted) {
@@ -75,11 +76,13 @@ longindset devSaveStatusDevSup = {
 
 epicsExportAddress(dset, devSaveStatusDevSup);
 
-static long saveStatus_init(int after) {
+static long saveStatus_init(int after)
+{
     return 0;
 }
 
-static long saveStatus_init_record(dbCommon* prec) {
+static long saveStatus_init_record(dbCommon* prec)
+{
     constexpr const char* funcName = "saveStatus_init_record";
 
     auto* pr = reinterpret_cast<longinRecord*>(prec);
@@ -112,12 +115,14 @@ static long saveStatus_init_record(dbCommon* prec) {
     return 0;
 }
 
-static long saveStatus_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt) {
+static long saveStatus_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt)
+{
     *ppvt = *statusIoScan();
     return 0;
 }
 
-static long saveStatus_read(longinRecord* prec) {
+static long saveStatus_read(longinRecord* prec)
+{
     auto* pr = reinterpret_cast<longinRecord*>(prec);
     auto* dpvt = static_cast<SaveStatusDpvt*>(pr->dpvt);
 
@@ -162,11 +167,13 @@ longoutdset devSaveControlDevSup = {
 
 epicsExportAddress(dset, devSaveControlDevSup);
 
-static long saveControl_init(int after) {
+static long saveControl_init(int after)
+{
     return 0;
 }
 
-static long saveControl_init_record(dbCommon* prec) {
+static long saveControl_init_record(dbCommon* prec)
+{
     constexpr const char* funcName = "saveControl_init_record";
 
     auto* dpvt = new SaveControlDpvt;
@@ -186,11 +193,13 @@ static long saveControl_init_record(dbCommon* prec) {
     return 0;
 }
 
-static long saveControl_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt) {
+static long saveControl_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt)
+{
     return 0;
 }
 
-static long saveControl_write(longoutRecord* prec) {
+static long saveControl_write(longoutRecord* prec)
+{
     auto* dpvt = static_cast<SaveControlDpvt*>(prec->dpvt);
     switch(dpvt->type) {
     case SaveControlDpvt::SaveAll:
@@ -236,11 +245,13 @@ mbbidset devSaveStatusMbbiDevSup = {
 
 epicsExportAddress(dset, devSaveStatusMbbiDevSup);
 
-static long saveStatusMbbi_init(int after) {
+static long saveStatusMbbi_init(int after)
+{
     return 0;
 }
 
-static long saveStatusMbbi_init_record(dbCommon* prec) {
+static long saveStatusMbbi_init_record(dbCommon* prec)
+{
     constexpr const char* funcName = "saveStatusMbbi_init_record";
 
     auto* dpvt = new SaveStatusMbbiDpvt;
@@ -271,12 +282,14 @@ static long saveStatusMbbi_init_record(dbCommon* prec) {
     return 0;
 }
 
-static long saveStatusMbbi_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt) {
+static long saveStatusMbbi_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt)
+{
     *ppvt = *statusIoScan();
     return 0;
 }
 
-static long saveStatusMbbi_read(mbbiRecord* prec) {
+static long saveStatusMbbi_read(mbbiRecord* prec)
+{
     auto* dpvt = static_cast<SaveStatusMbbiDpvt*>(prec->dpvt);
     if (!dpvt)
         return -1;
@@ -320,11 +333,13 @@ stringindset devSaveStatusStrDevSup = {
 
 epicsExportAddress(dset, devSaveStatusStrDevSup);
 
-static long saveStatusStr_init(int after) {
+static long saveStatusStr_init(int after)
+{
     return 0;
 }
 
-static long saveStatusStr_init_record(dbCommon* prec) {
+static long saveStatusStr_init_record(dbCommon* prec)
+{
     constexpr const char* funcName = "saveStatusStr_init_record";
 
     auto* dpvt = new SaveStatusStrDpvt;
@@ -357,7 +372,8 @@ static long saveStatusStr_init_record(dbCommon* prec) {
     return 0;
 }
 
-static long saveStatusStr_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt) {
+static long saveStatusStr_get_ioint_info(int cmd, struct dbCommon* precord, IOSCANPVT* ppvt)
+{
     if (!precord->dpvt)
         return -1;
 
@@ -365,7 +381,8 @@ static long saveStatusStr_get_ioint_info(int cmd, struct dbCommon* precord, IOSC
     return 0;
 }
 
-static long saveStatusStr_read(stringinRecord* prec) {
+static long saveStatusStr_read(stringinRecord* prec)
+{
     auto* dpvt = static_cast<SaveStatusStrDpvt*>(prec->dpvt);
 
     switch(dpvt->type) {
