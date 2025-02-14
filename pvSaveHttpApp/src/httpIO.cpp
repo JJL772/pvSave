@@ -28,10 +28,10 @@ constexpr int MAX_LINE_LENGTH = 4096;
 
 namespace pvsave {
 
-class httpIO : public pvsave::pvSaveIO {
+class httpIO : public pvsave::SaveRestoreIO {
 public:
     httpIO(const char *name, const char *url)
-        : pvsave::pvSaveIO(name), url_(url) {}
+        : pvsave::SaveRestoreIO(name), url_(url) {}
 
     uint32_t flags() const override { return Write | Read; /* Both read and write supported */ }
 

@@ -42,9 +42,9 @@ static epicsTimeStamp s_lastProcTime;
 static int s_lastStatus;
 
 /** Global list of IO backend instances */
-std::unordered_map<std::string, pvsave::pvSaveIO*>& pvsave::ioBackends()
+std::unordered_map<std::string, pvsave::SaveRestoreIO*>& pvsave::ioBackends()
 {
-    static std::unordered_map<std::string, pvsave::pvSaveIO*> b;
+    static std::unordered_map<std::string, pvsave::SaveRestoreIO*> b;
     return b;
 }
 
@@ -81,7 +81,7 @@ struct MonitorSet {
     double period;
 
     int stage;
-    std::vector<pvsave::pvSaveIO*> io;
+    std::vector<pvsave::SaveRestoreIO*> io;
     std::vector<std::string> pvList;
     class SaveContext* context;
 };
@@ -104,7 +104,7 @@ public:
 
     void init();
     bool save();
-    bool restore(pvsave::pvSaveIO* io);
+    bool restore(pvsave::SaveRestoreIO* io);
     bool restore();
 
     /** Returns the channels */
@@ -159,7 +159,7 @@ bool SaveContext::save()
 
     /* Forward the data to each of the IO handlers */
     for (auto& io : monitorSet_->io) {
-        if (io->flags() & pvsave::pvSaveIO::Write) {
+        if (io->flags() & pvsave::SaveRestoreIO::Write) {
             if (!io->beginWrite()) {
                 printf("pvSave: io->beginWrite: save failed\n");
                 lastStatus_ = 1;
@@ -185,9 +185,9 @@ bool SaveContext::save()
 /**
  * Restore data from an I/O backend
  */
-bool SaveContext::restore(pvsave::pvSaveIO* io)
+bool SaveContext::restore(pvsave::SaveRestoreIO* io)
 {
-    if (!(io->flags() & pvsave::pvSaveIO::Read))
+    if (!(io->flags() & pvsave::SaveRestoreIO::Read))
         return false;
 
     printf("Restoring from %s\n", monitorSet_->name.c_str());

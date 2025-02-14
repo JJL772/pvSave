@@ -33,10 +33,10 @@ enum fileSystemIOType { FSIO_TYPE_TEXT, FSIO_TYPE_JSON };
  * \brief Implementation of the file system IO backend
  * Supports an autosave-like text format and JSON parsed using yajl
  */
-class fileSystemIO : public pvsave::pvSaveIO {
+class fileSystemIO : public pvsave::SaveRestoreIO {
 public:
     fileSystemIO(const char *name, const char *filePath, fileSystemIOType type)
-        : pvsave::pvSaveIO(name), type_(type), path_(filePath) {}
+        : pvsave::SaveRestoreIO(name), type_(type), path_(filePath) {}
 
     uint32_t flags() const override { return Write | Read; /* Both read and write supported */ }
 
@@ -199,7 +199,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
     static const char* funcName = "fileSystemIO::readJson";
     bool success = true;
 
-    yajl_alloc_funcs af {
+    yajl_alloc_funcs af = {
         .malloc = [](void* c, size_t s) { return malloc(s); },
         .realloc = [](void* c, void* p, size_t s) { return realloc(p, s); },
         .free = [](void* c, void* p) { free(p); }
@@ -212,7 +212,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
         bool skip;
     } jsonReadState {pvs};
 
-    yajl_callbacks cb {
+    yajl_callbacks cb = {
         .yajl_string = [](void* c, const unsigned char* value, size_t l) -> int {
             auto pc = static_cast<JsonReadState*>(c);
             if (!pc->skip) {

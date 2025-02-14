@@ -18,7 +18,7 @@
 #include "pvsave/variant.h"
 
 namespace pvsave {
-    class pvSaveIO;
+    class SaveRestoreIO;
     class DataSource;
 
     /**
@@ -33,9 +33,9 @@ namespace pvsave {
 
     /**
      * \brief Returns a reference to the global list of IO backend instances.
-     * In general, this is for internal use and is automatically called by the pvSaveIO constructor.
+     * In general, this is for internal use and is automatically called by the SaveRestoreIO constructor.
      */
-    std::unordered_map<std::string, pvsave::pvSaveIO*> &ioBackends();
+    std::unordered_map<std::string, pvsave::SaveRestoreIO*> &ioBackends();
 
     DataSource* dataSource();
 
@@ -97,19 +97,26 @@ namespace pvsave {
     DataSource* createDataSourceCA();
 
     /**
-    * pvSaveIO is the base class for all I/O readers/writers used by pvSave
+    * SaveRestoreIO is the base class for all I/O readers/writers used by pvSave
     * It provides a subset of operations
     */
-    class pvSaveIO {
+    class SaveRestoreIO {
     public:
-        pvSaveIO() = delete;
-        pvSaveIO(const char* instName);
-        virtual ~pvSaveIO();
+        SaveRestoreIO() = delete;
+        SaveRestoreIO(const char* instName);
+        virtual ~SaveRestoreIO();
 
         enum Flags
         {
-            Read    = (1<<0),   /** This supports data reads */
-            Write   = (1<<1),   /** This supports data writes */
+            /**
+             * \brief Supports PV restores
+             */
+            Read    = (1<<0),
+
+            /**
+             * \brief Supports PV saves
+             */
+            Write   = (1<<1),
         };
 
         /**
@@ -162,6 +169,11 @@ namespace pvsave {
         * \param indent Indentation level (measured in number of spaces) to display with. Just a formatting helper
         */
         virtual void report(FILE* fp, int indent) = 0;
+
+        /**
+         * \brief Returns the name of this instance
+         */
+        const std::string& instanceName() const { return instName_; }
 
     protected:
         std::string instName_;

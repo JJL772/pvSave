@@ -10,13 +10,13 @@
 
 #include "pvsave/pvSave.h"
 
-pvsave::pvSaveIO::pvSaveIO(const char* instName) :
+pvsave::SaveRestoreIO::SaveRestoreIO(const char* instName) :
     instName_(instName)
 {
     pvsave::ioBackends().insert({instName, this});
 }
 
-pvsave::pvSaveIO::~pvSaveIO()
+pvsave::SaveRestoreIO::~SaveRestoreIO()
 {
     auto it = pvsave::ioBackends().find(instName_);
     if (it != pvsave::ioBackends().end())
