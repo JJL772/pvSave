@@ -1,15 +1,19 @@
-//////////////////////////////////////////////////////////////////////////////
-// This file is part of 'pvSave'.
-// It is subject to the license terms in the LICENSE.txt file found in the 
-// top-level directory of this distribution and at: 
-//    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-// No part of 'pvSave', including this file, 
-// may be copied, modified, propagated, or distributed except according to 
-// the terms contained in the LICENSE.txt file.
-//////////////////////////////////////////////////////////////////////////////
 /**
- * Device support types to display status and/or control PV save remotely
- */
+ * ----------------------------------------------------------------------------
+ * Company    : SLAC National Accelerator Laboratory
+ * ----------------------------------------------------------------------------
+ * Description: Device support types to display status and/or control pvSave
+ *  remotely.
+ * ----------------------------------------------------------------------------
+ * This file is part of 'pvSave'. It is subject to the license terms in the
+ * LICENSE.txt file found in the top-level directory of this distribution,
+ * and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of 'pvSave', including this file, may be copied, modified,
+ * propagated, or distributed except according to the terms contained in the
+ * LICENSE.txt file.
+ * ----------------------------------------------------------------------------
+ **/
 
 #define USE_TYPED_DSET
 
