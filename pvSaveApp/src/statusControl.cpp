@@ -30,6 +30,7 @@
 #include "epicsStdlib.h"
 #include "epicsAssert.h"
 #include "dbScan.h"
+#include "epicsStdio.h"
 
 #include "common.h"
 
@@ -98,7 +99,7 @@ static long saveStatus_init_record(dbCommon* prec)
         // Try to extract a number representing the monitorset/context to monitor
         if (*(instio+6)) {
             if (epicsParseInt32(instio+6, &dpvt->monitorSet, 10, nullptr) != 0) {
-                printf("%s: unable to parse instio string '%s'\n", funcName, instio);
+                LOG_ERR("%s: unable to parse instio string '%s'\n", funcName, instio);
                 pr->dpvt = nullptr;
                 delete dpvt;
                 return -1;
@@ -110,7 +111,7 @@ static long saveStatus_init_record(dbCommon* prec)
         dpvt->type = SaveStatusDpvt::LastSaved;
     }
     else {
-        printf("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
+        LOG_ERR("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
         delete dpvt;
         pr->dpvt = nullptr;
         return -1;
@@ -189,7 +190,7 @@ static long saveControl_init_record(dbCommon* prec)
         dpvt->type = SaveControlDpvt::SaveAll;
     }
     else {
-        printf("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
+        LOG_ERR("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
         delete dpvt;
         pr->dpvt = nullptr;
         return -1;
@@ -207,7 +208,7 @@ static long saveControl_write(longoutRecord* prec)
     auto* dpvt = static_cast<SaveControlDpvt*>(prec->dpvt);
     switch(dpvt->type) {
     case SaveControlDpvt::SaveAll:
-        printf("Saving from PV write\n");
+        LOG_INFO("Saving from PV write\n");
         pvsave::saveAllNow();
         break;
     default:
@@ -277,7 +278,7 @@ static long saveStatusMbbi_init_record(dbCommon* prec)
         dpvt->type = SaveStatusMbbiDpvt::Status;
     }
     else {
-        printf("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
+        LOG_ERR("%s: Invalid INST_IO parameter '%s'\n", funcName, instio);
         delete dpvt;
         pr->dpvt = nullptr;
         return -1;
@@ -355,7 +356,7 @@ static long saveStatusStr_init_record(dbCommon* prec)
     if (!epicsStrnCaseCmp(instio, "lastSaved", lastSavedLen)) {
         if (*(instio + lastSavedLen)) {
             if (epicsParseInt32(instio+lastSavedLen, &dpvt->monitorSet, 10, nullptr) != 0) {
-                printf("%s: Invalid INST_IO string '%s'\n", funcName, instio);
+                LOG_ERR("%s: Invalid INST_IO string '%s'\n", funcName, instio);
                 delete dpvt;
                 pr->dpvt = nullptr;
                 return -1;
@@ -368,7 +369,7 @@ static long saveStatusStr_init_record(dbCommon* prec)
     }
     else {
         delete dpvt;
-        printf("%s: Invalid INST_IO string '%s'\n", funcName, instio);
+        LOG_ERR("%s: Invalid INST_IO string '%s'\n", funcName, instio);
         pr->dpvt = nullptr;
         return -1;
     }

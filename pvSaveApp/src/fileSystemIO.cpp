@@ -25,9 +25,12 @@
 #include "epicsString.h"
 #include "iocsh.h"
 #include "yajl_parse.h"
+#include "errlog.h"
 
 #include "pvsave/pvSave.h"
 #include "pvsave/serialize.h"
+
+#include "common.h"
 
 constexpr int MAX_LINE_LENGTH = 4096;
 
@@ -114,7 +117,7 @@ bool fileSystemIO::saveText(const std::vector<DataSource::Channel> &pvNames, con
     for (size_t i = 0; i < pvCount; ++i) {
         // PV name
         if (fputs(pvNames[i].channelName.c_str(), handle_) < 0) {
-            printf("%s: fputs failed: %s\n", funcName, strerror(errno));
+            LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
             return false;
         }
         fputc(' ', handle_);
@@ -129,7 +132,7 @@ bool fileSystemIO::saveText(const std::vector<DataSource::Channel> &pvNames, con
         char line[MAX_LINE_LENGTH];
         line[0] = 0;
         if (!dataToString(pvValues[i], line, sizeof(line))) {
-            printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
+            LOG_ERR("Unable to serialize %s\n", pvNames[i].channelName.c_str());
         }
 
         fputs(line, handle_);
@@ -150,9 +153,10 @@ bool fileSystemIO::saveJson(const std::vector<DataSource::Channel> &pvNames, con
         const auto &value = pvValues[i];
 
         // PV name and type
-        if (fprintf(handle_, "\"%s#%s\": ", pvNames[i].channelName.c_str(), pvsave::typeCodeString(value.type_code())) <
-            0) {
-            printf("%s: fputs failed: %s\n", funcName, strerror(errno));
+        if (fprintf(handle_, "\"%s#%s\": ", 
+            pvNames[i].channelName.c_str(), pvsave::typeCodeString(value.type_code())) < 0)
+        {
+            LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
             return false;
         }
 
@@ -160,11 +164,11 @@ bool fileSystemIO::saveJson(const std::vector<DataSource::Channel> &pvNames, con
         char line[MAX_LINE_LENGTH];
         line[0] = 0;
         if (!dataToString(pvValues[i], line, sizeof(line))) {
-            printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
+            LOG_ERR("Unable to serialize %s\n", pvNames[i].channelName.c_str());
         }
 
         if (fprintf(handle_, "\"%s\"%s\n", line, i != pvCount - 1 ? "," : "") < 0) {
-            printf("%s: fprintf failed: %s\n", funcName, strerror(errno));
+            LOG_ERR("%s: fprintf failed: %s\n", funcName, strerror(errno));
         }
     }
     fputs("}\n", handle_);
@@ -229,7 +233,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
                 auto result = dataParseString((const char*)pstr, pc->type);
                 *(pstr + l) = c;
                 if (!result.first) {
-                    printf("%s: Unable to parse data for %s\n", funcName, pc->curPv.c_str());
+                    LOG_ERR("%s: Unable to parse data for %s\n", funcName, pc->curPv.c_str());
                 }
                 else {
                     pc->pvs.insert({pc->curPv, result.second});
@@ -245,14 +249,14 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
             // this could probably be implemented better, but this is the cheapest way to do it
             auto sep = pc->curPv.find_last_of('#');
             if (sep == pc->curPv.npos) {
-                printf("%s: Missing typecode for PV '%s'\n", funcName, key);
+                LOG_ERR("%s: Missing typecode for PV '%s'\n", funcName, key);
                 pc->skip = true; // Skip if errored
             }
             else {
                 pc->curPv.erase(sep);
                 auto tc = pvsave::typeCodeFromString(pc->curPv.c_str()+sep+1);
                 if (!tc.first) {
-                    printf("%s: Unknown type code %s\n", funcName, pc->curPv.c_str()+sep+1);
+                    LOG_ERR("%s: Unknown type code %s\n", funcName, pc->curPv.c_str()+sep+1);
                     pc->skip = true; // Skip if errored
                 }
                 else
@@ -264,7 +268,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
 
     yajl_handle yh = yajl_alloc(&cb, &af, &jsonReadState);
     if (!yh) {
-        printf("%s: Unable to alloc yajl handle!\n", funcName);
+        LOG_ERR("%s: Unable to alloc yajl handle!\n", funcName);
         return false;
     }
 
@@ -274,7 +278,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
     while ((nread = fread(rb, 1, bs, handle_)) > 0) {
         if (yajl_parse(yh, rb, nread) != yajl_status_ok) {
             auto* errstr = yajl_get_error(yh, 1, rb, nread);
-            printf("%s: yajl_parse returned error: %s\n", funcName, errstr);
+            LOG_ERR("%s: yajl_parse returned error: %s\n", funcName, errstr);
             free(errstr);
             success = false;
             goto done;
@@ -320,41 +324,41 @@ bool fileSystemIO::readText(std::unordered_map<std::string, Data> &pvs) {
         // PV name
         pname = strtok_r(lptr, " ", &sp);
         if (!pname) {
-            printf("%s: file %s, line %d: missing PV name\n", funcName, path_.c_str(), line);
+            LOG_ERR("%s: file %s, line %d: missing PV name\n", funcName, path_.c_str(), line);
             continue;
         }
 
         // PV type
         ptype = strtok_r(nullptr, " ", &sp);
         if (!ptype) {
-            printf("%s: file %s, line %d: missing PV type\n", funcName, path_.c_str(), line);
+            LOG_ERR("%s: file %s, line %d: missing PV type\n", funcName, path_.c_str(), line);
             continue;
         }
 
         // PV value
         pval = strtok_r(nullptr, " ", &sp);
         if (!pval) {
-            printf("%s: file %s, line %d: missing PV value\n", funcName, path_.c_str(), line);
+            LOG_ERR("%s: file %s, line %d: missing PV value\n", funcName, path_.c_str(), line);
             continue;
         }
 
         // Determine and validate type
         auto typeCode = pvsave::typeCodeFromString(ptype);
         if (!typeCode.first) {
-            printf("%s: file %s, line %d: unknown type name '%s'\n", funcName, path_.c_str(), line, ptype);
+            LOG_ERR("%s: file %s, line %d: unknown type name '%s'\n", funcName, path_.c_str(), line, ptype);
             continue;
         }
 
         std::string parsedValue;
         if (pvsave::parseString(pval, parsedValue) == pval) {
-            printf("%s: file %s, line %d: failed to parse value string\n", funcName, path_.c_str(), line);
+            LOG_ERR("%s: file %s, line %d: failed to parse value string\n", funcName, path_.c_str(), line);
             continue;
         }
 
         // Parse the data into a variant
         auto value = pvsave::dataParseString(parsedValue.c_str(), typeCode.second);
         if (!value.first) {
-            printf("%s: file %s, line %d: unable to parse value '%s'\n", funcName, path_.c_str(), line, pval);
+            LOG_ERR("%s: file %s, line %d: unable to parse value '%s'\n", funcName, path_.c_str(), line, pval);
             continue;
         }
 
@@ -362,7 +366,7 @@ bool fileSystemIO::readText(std::unordered_map<std::string, Data> &pvs) {
     }
 
     if (!lptr && errno != 0 && errno != EOF) {
-        printf("%s: getline failed: %s\n", funcName, strerror(errno));
+        LOG_ERR("%s: getline failed: %s\n", funcName, strerror(errno));
         return false;
     }
     return true;

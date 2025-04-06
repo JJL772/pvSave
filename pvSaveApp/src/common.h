@@ -17,9 +17,19 @@
 #pragma once
 
 #include <dbAccess.h>
+#include <errlog.h>
 
 namespace pvsave
 {
+    
+enum ELoggingLevel
+{
+    LL_Trace = -2,
+    LL_Debug = -1,
+    LL_Info = 0,
+    LL_Warn,
+    LL_Err,
+};
 
 /**
  * Save NOW! Locks the save mutex
@@ -43,7 +53,27 @@ epicsTimeStamp lastProcTime(int ms = -1);
  */
 int lastStatus(int ms = -1);
 
+/**
+ * Current logging level
+ */
+extern ELoggingLevel logLevel;
+
 } // namespace pvsave
+
+/**
+ * Logging macros.
+ */
+#define LOG_MSG(_level, ...) \
+    do { \
+        if (_level >= pvsave::logLevel) \
+            errlogPrintf(__VA_ARGS__); \
+    } while (0)
+
+#define LOG_TRACE(...) LOG_MSG(LL_Trace, __VA_ARGS__)
+#define LOG_WARN(...) LOG_MSG(LL_Warn, __VA_ARGS__)
+#define LOG_ERR(...) LOG_MSG(LL_Err, __VA_ARGS__)
+#define LOG_DBG(...) LOG_MSG(LL_Debug, __VA_ARGS__)
+#define LOG_INFO(...) LOG_MSG(LL_Info, __VA_ARGS__)
 
 /**
  * Simple RAII locker for DB scan locks.

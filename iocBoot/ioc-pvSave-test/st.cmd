@@ -29,15 +29,20 @@ dbLoadRecords("db/pvSaveTest.db","P=myioc:")
 #
 #===============================================================#
 
+# Set the logging level to trace for this debug IOC
+pvSave_SetLogLevel trace
+
 # Load pvSave status records
 dbLoadRecords("db/SaveStatus.db","P=myioc:")
 
-# Create a new PV set to monitor for changes
+# Create a new PV set to monitor for changes every 10 seconds
 pvSave_CreatePvSet("test1", 10.0)
 
 # Create an IO instance for saving JSON to the file system
 pvSave_ConfigureFileSystemIO("fsio1", "test.jsav", "json")
 #pvSave_ConfigureHTTPIO("httpio1", "http://localhost:5000")
+
+# Individual PVs can be added in iocsh too.
 #pvSave_AddPvSetPV("test1", "test001.VAL")
 #pvSave_AddPvSetPV("test1", "test002.VAL")
 

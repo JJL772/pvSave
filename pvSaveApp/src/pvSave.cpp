@@ -47,6 +47,8 @@ static epicsThreadId s_threadId = 0;
 static epicsTimeStamp s_lastProcTime;
 static int s_lastStatus;
 
+ELoggingLevel pvsave::logLevel = ELoggingLevel::LL_Info;
+
 /** Global list of IO backend instances */
 std::unordered_map<std::string, pvsave::SaveRestoreIO*>& pvsave::ioBackends()
 {
@@ -167,20 +169,20 @@ bool SaveContext::save()
     for (auto& io : monitorSet_->io) {
         if (io->flags() & pvsave::SaveRestoreIO::Write) {
             if (!io->beginWrite()) {
-                printf("pvSave: io->beginWrite: save failed\n");
+                LOG_ERR("pvSave: io->beginWrite: save failed\n");
                 lastStatus_ = 1;
                 continue;
             }
 
             if (!io->writeData(channels_, data, data.size())) {
-                printf("pvSave: io->writeData: save failed\n");
+                LOG_ERR("pvSave: io->writeData: save failed\n");
                 lastStatus_ = 1;
                 /* Fallthrough as we want the IO handler to do cleanup */
             }
 
             if (!io->endWrite()) {
                 lastStatus_ = 1;
-                printf("pvSave: io->endWrite: save failed\n");
+                LOG_ERR("pvSave: io->endWrite: save failed\n");
             }
         }
     }
@@ -196,21 +198,21 @@ bool SaveContext::restore(pvsave::SaveRestoreIO* io)
     if (!(io->flags() & pvsave::SaveRestoreIO::Read))
         return false;
 
-    printf("Restoring from %s\n", monitorSet_->name.c_str());
+    LOG_INFO("Restoring from %s\n", monitorSet_->name.c_str());
 
     if (!io->beginRead()) {
-        printf("pvSave: io->beginRead: restore failed\n");
+        LOG_ERR("pvSave: io->beginRead: restore failed\n");
         return false;
     }
 
     std::unordered_map<std::string, pvsave::Data> pvs;
     if (!io->readData(pvs)) {
-        printf("pvSave: io->readData: restore failed\n");
+        LOG_ERR("pvSave: io->readData: restore failed\n");
         /* Fallthrough to allow cleanup */
     }
 
     if (!io->endRead()) {
-        printf("pvSave: io->endRead: restore failed\n");
+        LOG_ERR("pvSave: io->endRead: restore failed\n");
     }
 
     for (size_t i = 0; i < channels_.size(); ++i) {
@@ -238,7 +240,7 @@ bool SaveContext::restore()
     }
 
     if (!restoredAny) {
-        printf("%s: restore failed: no backend was able to restore\n", "SaveContext::restore");
+        LOG_ERR("%s: restore failed: no backend was able to restore\n", "SaveContext::restore");
         return false;
     }
     return true;
@@ -252,7 +254,7 @@ epicsTimeStamp pvsave::lastProcTime(int ms)
 {
     if (ms < 0) {
         return s_lastProcTime;
-    } else if (ms < SaveContext::saveContexts.size()) {
+    } else if ((size_t)ms < SaveContext::saveContexts.size()) {
         return SaveContext::saveContexts[ms].lastProc_;
     } else {
         return {};
@@ -263,7 +265,7 @@ int pvsave::lastStatus(int ms)
 {
     if (ms < 0) {
         return s_lastStatus;
-    } else if (ms < SaveContext::saveContexts.size()) {
+    } else if ((size_t)ms < SaveContext::saveContexts.size()) {
         return SaveContext::saveContexts[ms].lastStatus_;
     } else {
         return 0;
@@ -281,7 +283,7 @@ void pvsave::saveAllNow()
     for (auto& context : SaveContext::saveContexts) {
         if (!context.save()) {
             s_lastStatus = 1;
-            printf("Unable to save!\n");
+            LOG_ERR("Unable to save!\n");
         }
         context.lastProc_ = now;
     }
@@ -299,13 +301,13 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
 {
     MAC_HANDLE* handle = nullptr;
     if (macCreateHandle(&handle, nullptr) != 0) {
-        printf("readPvList: macCreateHandle failed\n");
+        LOG_ERR("readPvList: macCreateHandle failed\n");
         return false;
     }
 
     char** pairs = nullptr;
     if (macParseDefns(handle, defs, &pairs) < 0) {
-        printf("readPvList: macParseDefns failed to parse definitions string\n");
+        LOG_ERR("readPvList: macParseDefns failed to parse definitions string\n");
         macDeleteHandle(handle);
         return false;
     }
@@ -330,7 +332,7 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
         char expanded[MAX_LINE_LENGTH];
         long elen = 0;
         if ((elen = macExpandString(handle, line, expanded, sizeof(expanded))) < 0) {
-            printf("readPvList: unexpanded macro string\n");
+            LOG_WARN("readPvList: unexpanded macro string\n");
             /** Treat this as a success */
         }
 
@@ -348,7 +350,7 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
         /** Only insert if there's something left */
         if (*l) {
             list.push_back(l);
-            printf("Adding '%s'\n", l);
+            LOG_TRACE("Adding '%s'\n", l);
         }
     }
 
@@ -410,7 +412,7 @@ static void pvSaveThreadProc(void* data)
             }
 
             if (!context.save()) {
-                printf("pvSave: save failed\n");
+                LOG_ERR("pvSave: save failed\n");
                 s_lastStatus = 1;
             }
             context.lastProc_ = now;
@@ -432,7 +434,7 @@ void pvsInitHook(initHookState state)
     }
     /* Kick off discovery of PVs */
     else if (state == initHookAfterInitDevSup) {
-        printf("pvSave: Discovering PVs\n");
+        LOG_INFO("pvSave: Discovering PVs\n");
         for (auto& context : SaveContext::saveContexts)
             context.init();
 
@@ -620,8 +622,8 @@ static void pvSave_ListPvSetsCallFunc(const iocshArgBuf* buf)
     for (auto& pair : monitorSets) {
         printf("%s: %lu PVs\n", pair.first.c_str(), pair.second->pvList.size());
         printf("  IO ports:\n");
-        for (int i = 0; i < pair.second->io.size(); ++i) {
-            printf("   %d:\n", i);
+        for (size_t i = 0; i < pair.second->io.size(); ++i) {
+            printf("   %zu:\n", i);
             pair.second->io[i]->report(stdout, 5);
         }
     }
@@ -699,6 +701,34 @@ static void pvSave_SaveCallFunc(const iocshArgBuf* buf)
     pvsave::saveAllNow();
 }
 
+static void pvSave_SetLoggingLevelCallFunc(const iocshArgBuf* buf)
+{
+    const char* funcName = "pvSave_SetLoggingLevel";
+    if (!buf[0].sval) {
+        printf("USAGE: pvSave_SetLoggingLevel [trace|debug|info|warn|err]\n");
+        return;
+    }
+    
+    if (!strcmp(buf[0].sval, "trace")) {
+        logLevel = LL_Trace;
+    }
+    else if (!strcmp(buf[0].sval, "debug")) {
+        logLevel = LL_Debug;
+    }
+    else if (!strcmp(buf[0].sval, "info")) {
+        logLevel = LL_Info;
+    }
+    else if (!strcmp(buf[0].sval, "warn")) {
+        logLevel = LL_Warn;
+    }
+    else if (!strcmp(buf[0].sval, "err")) {
+        logLevel = LL_Err;
+    }
+    else {
+        printf("%s: level must be trace, debug, info, warn or err\n", funcName);
+    }
+}
+
 void registerFuncs()
 {
     /* pvSave_CreatePvSet */
@@ -770,10 +800,18 @@ void registerFuncs()
         iocshRegister(&funcDef, pvSave_SetThreadPriorityCallFunc);
     }
 
-    /* psSave_Save */
+    /* pvSave_Save */
     {
         static iocshFuncDef funcDef = {"pvSave_Save", 0, NULL};
         iocshRegister(&funcDef, pvSave_SaveCallFunc);
+    }
+    
+    /* pvSave_SetLogLevel */
+    {
+        static iocshArg arg0 = {"level", iocshArgString};
+        static const iocshArg* args[] = {&arg0};
+        static iocshFuncDef funcDef = {"pvSave_SetLogLevel", 1, args};
+        iocshRegister(&funcDef, pvSave_SetLoggingLevelCallFunc);
     }
 
     initHookRegister(pvsInitHook);
