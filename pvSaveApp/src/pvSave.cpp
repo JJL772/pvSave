@@ -36,6 +36,8 @@
 #include "initHooks.h"
 #include "iocsh.h"
 #include "macLib.h"
+#include "dbAccess.h"
+#include "dbStaticLib.h"
 
 using namespace pvsave;
 
@@ -115,13 +117,13 @@ public:
     bool restore(pvsave::SaveRestoreIO* io);
     bool restore();
 
-    /** Returns the channels */
+    // Returns the channels
     inline const std::vector<pvsave::DataSource::Channel>& channels() const
     {
         return channels_;
     }
 
-    /** Returns the monitor set we were configured with */
+    // Returns the monitor set we were configured with
     inline const std::shared_ptr<MonitorSet>& monitorSet() const
     {
         return monitorSet_;
@@ -168,7 +170,7 @@ bool SaveContext::save()
     std::vector<pvsave::SaveRestoreIO*> ios;
     ios.reserve(16);
     
-    /* Begin read on each of our monitor sets */
+    // Begin read on each of our monitor sets
     for (auto& io : monitorSet_->io) {
         if (io->flags() & pvsave::SaveRestoreIO::Write) {
             if (!io->beginWrite()) {
@@ -180,23 +182,23 @@ bool SaveContext::save()
         }
     }
     
-    /* Read the data from each of the open channels */
+    // Read the data from each of the open channels
     for (size_t i = 0; i < channels_.size(); ++i) {
         pvsave::Data data;
         pvsave::dataSource()->get(channels_[i], data);
 
-        /* Forward the data to each of the IO backends */
+        // Forward the data to each of the IO backends
         for (auto& io : ios) {
             if (!io->writeData(channels_[i], data)) {
                 LOG_ERR("pvSave: io->writeData: save failed\n");
                 lastStatus_ = 1;
-                /* Fall-through to allow cleanup */
+                // Fall-through to allow cleanup
             }
             LOG_TRACE("wrote %s\n", channels_[i].channelName.c_str());
         }
     }
     
-    /* Finish off the write */
+    // Finish off the write
     for (auto& io : ios) {
         if (!io->endWrite()) {
             lastStatus_ = 1;
@@ -225,7 +227,7 @@ bool SaveContext::restore(pvsave::SaveRestoreIO* io)
     std::unordered_map<std::string, pvsave::Data> pvs;
     if (!io->readData(pvs)) {
         LOG_ERR("pvSave: io->readData: restore failed\n");
-        /* Fallthrough to allow cleanup */
+        // Fallthrough to allow cleanup
     }
 
     if (!io->endRead()) {
@@ -235,7 +237,7 @@ bool SaveContext::restore(pvsave::SaveRestoreIO* io)
     for (size_t i = 0; i < channels_.size(); ++i) {
         auto it = pvs.find(channels_[i].channelName);
         if (it == pvs.end()) {
-            continue; /* PV not found in save data */
+            continue; // PV not found in save data
         }
         pvsave::dataSource()->put(channels_[i], it->second);
     }
@@ -305,7 +307,7 @@ void pvsave::saveAllNow()
         context.lastProc_ = now;
     }
 
-    /* Kick off I/O scan for status records */
+    // Kick off I/O scan for status records
     scanIoRequest(*statusIoScan());
 }
 
@@ -341,7 +343,7 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
         if (result == NULL)
             break;
 
-        /** Find start of comment and NULL terminate there */
+        // Find start of comment and NULL terminate there
         char* s = nullptr;
         if ((s = strpbrk(line, "#")))
             *s = 0;
@@ -350,21 +352,21 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
         long elen = 0;
         if ((elen = macExpandString(handle, line, expanded, sizeof(expanded))) < 0) {
             LOG_WARN("readPvList: unexpanded macro string\n");
-            /** Treat this as a success */
+            // Treat this as a success
         }
 
-        /** Skip leading whitespace */
+        // Skip leading whitespace
         char* l = expanded;
         while (isspace(*l))
             l++;
 
-        /** ..and trim off trailing */
+        // ..and trim off trailing
         for (char* p = expanded + elen - 1; *p && p >= expanded; p--) {
             if (isspace(*p))
                 *p = 0;
         }
 
-        /** Only insert if there's something left */
+        // Only insert if there's something left
         if (*l) {
             list.push_back(l);
             LOG_TRACE("Adding '%s'\n", l);
@@ -398,6 +400,36 @@ static std::shared_ptr<MonitorSet> findMonitorSet(const char* name)
     return it->second;
 }
 
+static void tokenizeAndAdd(const char* recName, const char* fields, std::vector<std::string>& list)
+{
+    if (!fields) return;
+
+    char buf[MAX_STRING_SIZE+1] = {0};
+    int n = 0;
+    for (const char* p = fields; *p; p++) {
+        if (!isspace(*p)) {
+            if (n > MAX_STRING_SIZE) {
+                LOG_ERR("%s: field too long: '%s'\n", __func__, buf);
+                return;
+            }
+            buf[n++] = *p;
+        }
+        else if (n > 0) {
+            buf[n] = 0;
+            list.push_back(std::string(recName) + '.' + buf);
+            LOG_TRACE("%s: Adding '%s'\n", __func__, list[list.size()-1].c_str());
+            n = 0;
+        }
+    }
+
+    // Add any remaining
+    if (n > 0) {
+        buf[n] = 0;
+        list.push_back(std::string(recName) + '.' + buf);
+        LOG_TRACE("%s: Adding '%s'\n", __func__, list[list.size()-1].c_str());
+    }
+}
+
 //-------------------------------------------------------------------------//
 // Thread proc
 //-------------------------------------------------------------------------//
@@ -423,7 +455,7 @@ static void pvSaveThreadProc(void* data)
         for (auto& context : SaveContext::saveContexts) {
             double diff;
             if ((diff = epicsTimeDiffInSeconds(&now, &context.lastProc_)) < context.monitorSet()->period) {
-                /* Compute how long we should sleep for next iteration. This isn't going to be perfect though */
+                // Compute how long we should sleep for next iteration. This isn't going to be perfect though
                 sleepTime = epicsMin(diff, sleepTime);
                 continue;
             }
@@ -436,38 +468,38 @@ static void pvSaveThreadProc(void* data)
             sleepTime = epicsMin(sleepTime, context.monitorSet()->period);
         }
 
-        /* Kick off I/O scan for status records */
+        // Kick off I/O scan for status records
         scanIoRequest(*statusIoScan());
     }
 }
 
 void pvsInitHook(initHookState state)
 {
-    /* Create the contexts and init everything else */
+    // Create the contexts and init everything else
     if (state == initHookAtIocBuild) {
         for (auto& ms : monitorSets) {
             SaveContext::saveContexts.emplace_back(ms.second);
         }
     }
-    /* Kick off discovery of PVs */
+    // Kick off discovery of PVs
     else if (state == initHookAfterInitDevSup) {
         LOG_INFO("pvSave: Discovering PVs\n");
         for (auto& context : SaveContext::saveContexts)
             context.init();
 
-        /* Pass 0 restore */
+        // Pass 0 restore
         for (auto& context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
     } else if (state == initHookAfterInitDatabase) {
-        /* Pass 1 restore */
+        // Pass 1 restore
         for (auto& context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
         }
     } else if (state == initHookAfterIocRunning) {
-        /* Pass 2 restore */
+        // Pass 2 restore
         for (auto& context : SaveContext::saveContexts) {
             if (context.monitorSet()->stage == state)
                 context.restore();
@@ -600,7 +632,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf* buf)
         return;
     }
 
-    /* Stage may be specified in an autosave-like way */
+    // Stage may be specified in an autosave-like way
     epicsUInt32 st;
     if (epicsParseUInt32(stage, &st, 10, NULL) == 0) {
         switch (st) {
@@ -619,7 +651,7 @@ static void pvSave_SetPvSetRestoreStageCallFunc(const iocshArgBuf* buf)
             return;
         }
     }
-    /* May also be a string */
+    // May also be a string
     else {
         if (!epicsStrCaseCmp(stage, "AfterInitDevSup")) {
             mset->stage = initHookAfterInitDevSup;
@@ -665,23 +697,17 @@ static void pvSave_ListChannelsCallFunc(const iocshArgBuf* buf)
         return;
     }
 
-#if 0
-    bool onlyConnected = filter ? !epicsStrCaseCmp(filter, "connected") : false;
-    bool onlyDisconnected = filter ? !epicsStrCaseCmp(filter, "disconnected") : false;
-
     if (mset->context) {
         printf("%s (%lu channels)\n", name, mset->context->channels().size());
         for (auto &conn : mset->context->channels()) {
-            if (onlyConnected && !conn->connected())
+            // TODO: Better searching; use regexp or glob!
+            if (filter && !strstr(conn.channelName.c_str(), filter))
                 continue;
-            if (onlyDisconnected && conn->connected())
-                continue;
-            printf("  %s: %s\n", conn->name().c_str(), conn->connected() ? "CONNECTED" : "DISCONNECTED");
+            printf("  %s\n", conn.channelName.c_str());
         }
     } else {
         printf("No channels yet\n");
     }
-#endif
 }
 
 static void pvSave_SetThreadPriorityCallFunc(const iocshArgBuf* buf)
@@ -723,6 +749,7 @@ static void pvSave_SetLoggingLevelCallFunc(const iocshArgBuf* buf)
     const char* funcName = "pvSave_SetLoggingLevel";
     if (!buf[0].sval) {
         printf("USAGE: pvSave_SetLoggingLevel [trace|debug|info|warn|err]\n");
+        iocshSetError(-1);
         return;
     }
     
@@ -745,6 +772,43 @@ static void pvSave_SetLoggingLevelCallFunc(const iocshArgBuf* buf)
         printf("%s: level must be trace, debug, info, warn or err\n", funcName);
     }
 }
+
+static void pvSave_InitFromDbCallFunc(const iocshArgBuf* buf)
+{
+    constexpr const char* funcName = "pvSave_InitFromDb";
+    if (!buf[0].sval) {
+        printf("USAGE: %s monitorSetName\n", funcName);
+        iocshSetError(-1);
+        return;
+    }
+
+    printf("%s: Starting lookup of EPICS PVs...\n", funcName);
+
+    epicsTimeStamp start, end;
+    epicsTimeGetCurrent(&start);
+
+    auto ms = findMonitorSet(buf[0].sval);
+    if (!ms) {
+        printf("%s: No such monitor set '%s'\n", funcName, buf[0].sval);
+        iocshSetError(-1);
+        return;
+    }
+
+    DBENTRY dbe = {0};
+    dbInitEntry(pdbbase, &dbe);
+    for (long stat = dbFirstRecordType(&dbe); stat == 0; stat = dbNextRecordType(&dbe)) {
+        for (stat = dbFirstRecord(&dbe); stat == 0; stat = dbNextRecord(&dbe)) {
+            auto* recName = dbGetRecordName(&dbe);
+            tokenizeAndAdd(recName, dbGetInfo(&dbe, "autosaveFields"), ms->pvList); // Backwards compat
+            tokenizeAndAdd(recName, dbGetInfo(&dbe, "saveFields"), ms->pvList);
+        }
+    }
+    dbFinishEntry(&dbe);
+
+    epicsTimeGetCurrent(&end);
+    printf("%s: Completed lookup in %.2f seconds\n", funcName, epicsTimeDiffInSeconds(&end, &start));
+}
+
 
 void registerFuncs()
 {
@@ -829,6 +893,14 @@ void registerFuncs()
         static const iocshArg* args[] = {&arg0};
         static iocshFuncDef funcDef = {"pvSave_SetLogLevel", 1, args};
         iocshRegister(&funcDef, pvSave_SetLoggingLevelCallFunc);
+    }
+
+    /* pvSave_InitFromDb */
+    {
+        static iocshArg arg0 = {"monitorSet", iocshArgString};
+        static const iocshArg* args[] = {&arg0};
+        static iocshFuncDef funcDef = {"pvSave_InitFromDb", 1, args};
+        iocshRegister(&funcDef, pvSave_InitFromDbCallFunc);
     }
 
     initHookRegister(pvsInitHook);

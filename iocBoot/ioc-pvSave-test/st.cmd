@@ -49,6 +49,9 @@ pvSave_ConfigureFileSystemIO("fsio1", "test.jsav", "json")
 # Add a list of PVs to save
 pvSave_AddPvSetList("test1", "${TOP}/iocBoot/${IOC}/pvlist.pvl", "P=myioc:")
 
+# Add records with info() fields to "test1" monitor set
+pvSave_InitFromDb("test1")
+
 # Add an IO backend to save/load them
 pvSave_AddPvSetIO("test1", "fsio1")
 

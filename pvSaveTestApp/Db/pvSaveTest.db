@@ -46,8 +46,15 @@ record(int64in, "$(P)test_int64in") {
     field(VAL, "25")
 }
 
-record(int64in, "$(P)test_int64out") {
+record(int64out, "$(P)test_int64out") {
     field(LOPR, "2")
     field(HOPR, "150")
     field(VAL, "25")
+}
+
+record(longin, "$(P)test_longin_info") {
+    field(LOPR, "1")
+    field(HOPR, "3")
+    field(VAL, "2")
+    info(autosaveFields, "LOPR HOPR VAL")
 }

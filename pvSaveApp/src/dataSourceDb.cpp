@@ -153,27 +153,27 @@ void DataSourceCA::put(const Channel &channel, const Data &data)
 
 void DataSourceCA::get(const Channel &channel, Data &data)
 {
-    auto *pdb = static_cast<dbAddr *>(channel.contextData);
-    data = dataFromDbfType(pdb->dbr_field_type);
+    auto *pdb = static_cast<ContextData *>(channel.contextData);
+    data = dataFromDbfType(pdb->addr.dbr_field_type);
 
     long result;
 
-    dbAutoScanLock al(pdb->precord);
+    dbAutoScanLock al(pdb->addr.precord);
 
     /** Special handling for string fields */
-    if (pdb->dbr_field_type == DBR_STRING) {
+    if (pdb->addr.dbr_field_type == DBR_STRING) {
         char buf[MAX_STRING_SIZE + 1];
         buf[0] = 0;
 
         long req = sizeof(buf);
-        if ((result = dbGetField(pdb, pdb->dbr_field_type, buf, nullptr, &req, nullptr)) != 0) {
+        if ((result = dbGetField(&pdb->addr, pdb->addr.dbr_field_type, buf, nullptr, &req, nullptr)) != 0) {
             printf("DataSourceCA::get: dbGet() failed: %li\n", result);
             return;
         }
 
         *data.get<std::string>() = buf;
     } else {
-        if ((result = dbGetField(pdb, pdb->dbr_field_type, data.data(), nullptr, nullptr, nullptr)) != 0) {
+        if ((result = dbGetField(&pdb->addr, pdb->addr.dbr_field_type, data.data(), nullptr, nullptr, nullptr)) != 0) {
             printf("DataSourceCA::get: dbGet() failed: %li\n", result);
             return;
         }
