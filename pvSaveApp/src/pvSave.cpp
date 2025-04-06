@@ -164,8 +164,11 @@ bool SaveContext::save()
     for (size_t i = 0; i < channels_.size(); ++i) {
         pvsave::dataSource()->get(channels_[i], data[i]);
     }
-
-    /* Forward the data to each of the IO handlers */
+    
+    std::vector<pvsave::SaveRestoreIO*> ios;
+    ios.reserve(16);
+    
+    /* Begin read on each of our monitor sets */
     for (auto& io : monitorSet_->io) {
         if (io->flags() & pvsave::SaveRestoreIO::Write) {
             if (!io->beginWrite()) {
@@ -173,17 +176,31 @@ bool SaveContext::save()
                 lastStatus_ = 1;
                 continue;
             }
+            ios.push_back(io);
+        }
+    }
+    
+    /* Read the data from each of the open channels */
+    for (size_t i = 0; i < channels_.size(); ++i) {
+        pvsave::Data data;
+        pvsave::dataSource()->get(channels_[i], data);
 
-            if (!io->writeData(channels_, data, data.size())) {
+        /* Forward the data to each of the IO backends */
+        for (auto& io : ios) {
+            if (!io->writeData(channels_[i], data)) {
                 LOG_ERR("pvSave: io->writeData: save failed\n");
                 lastStatus_ = 1;
-                /* Fallthrough as we want the IO handler to do cleanup */
+                /* Fall-through to allow cleanup */
             }
-
-            if (!io->endWrite()) {
-                lastStatus_ = 1;
-                LOG_ERR("pvSave: io->endWrite: save failed\n");
-            }
+            LOG_TRACE("wrote %s\n", channels_[i].channelName.c_str());
+        }
+    }
+    
+    /* Finish off the write */
+    for (auto& io : ios) {
+        if (!io->endWrite()) {
+            lastStatus_ = 1;
+            LOG_ERR("pvSave: io->endWrite: save failed\n");
         }
     }
 

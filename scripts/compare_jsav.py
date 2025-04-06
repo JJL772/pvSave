@@ -31,4 +31,6 @@ for k,v in a.items():
         ec = 1
         print(f'{k}: a=({v}) != b({b[k]})')
 
+if ec != 0:
+    print(f'{args.i} and {args.c} differ')
 exit(ec)

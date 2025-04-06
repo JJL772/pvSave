@@ -51,10 +51,12 @@ public:
 
     bool openFile();
 
-    bool beginWrite() override { return openFile(); }
-    bool saveText(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount);
-    bool saveJson(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data>& pvValues, size_t pvCount);
-    bool writeData(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data>& pvValues, size_t pvCount) override;
+    bool beginWrite() override;
+    bool beginWriteJson();
+    bool saveText(const DataSource::Channel &channel, const Data &data);
+    bool saveJson(const DataSource::Channel &channel, const Data &data);
+    bool writeData(const DataSource::Channel &channel, const Data& pvValue) override;
+    void endWriteJson();
     bool endWrite() override;
 
     /** Reading interface */
@@ -69,15 +71,41 @@ public:
 protected:
     fileSystemIOType type_;
     std::string path_;
+    size_t currentChan_;        // Hack for JSON trailing commas
     FILE *handle_ = nullptr;
 };
 
+bool fileSystemIO::beginWrite() {
+    constexpr const char* funcName = "fileSystemIO::beginWrite";
+    if (!openFile())
+        return false;
+
+    // Start from a clean slate; seek to start and truncate
+    if (fseek(handle_, 0, SEEK_SET) != 0) {
+        LOG_ERR("%s: fseek failed: %s\n", funcName, strerror(errno));
+        return false;
+    }
+    
+    if (ftruncate(fileno(handle_), 0) < 0) {
+        LOG_ERR("%s: ftruncate failed: %s\n", funcName, strerror(errno));
+        return false;
+    }
+        
+    if (type_ == FSIO_TYPE_JSON)
+        return beginWriteJson();
+    return true;
+}
+
 bool fileSystemIO::endWrite() {
+    if (type_ == FSIO_TYPE_JSON)
+        endWriteJson();
     fflush(handle_);
     return true;
 }
 
 bool fileSystemIO::openFile() {
+    currentChan_ = 0;
+
     if (!handle_)
         handle_ = fopen(path_.c_str(), "a+b"); // Don't truncate file on load, but open in RDWR mode
 
@@ -112,93 +140,88 @@ bool fileSystemIO::readData(std::unordered_map<std::string, Data>& pvs) {
 /**
  * \brief Save implementation of autosave-like .SAV files
  */
-bool fileSystemIO::saveText(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount) {
+bool fileSystemIO::saveText(const DataSource::Channel& channel, const Data &value) {
     const char *funcName = "fileSystemIO::saveText";
-    for (size_t i = 0; i < pvCount; ++i) {
-        // PV name
-        if (fputs(pvNames[i].channelName.c_str(), handle_) < 0) {
-            LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
-            return false;
-        }
-        fputc(' ', handle_);
 
-        const auto &value = pvValues[i];
-
-        // Type string
-        fputs(pvsave::typeCodeString(value.type_code()), handle_);
-        fputc(' ', handle_);
-
-        // Value
-        char line[MAX_LINE_LENGTH];
-        line[0] = 0;
-        if (!dataToString(pvValues[i], line, sizeof(line))) {
-            LOG_ERR("Unable to serialize %s\n", pvNames[i].channelName.c_str());
-        }
-
-        fputs(line, handle_);
-        fputc('\n', handle_);
+    // PV name
+    if (fputs(channel.channelName.c_str(), handle_) < 0) {
+        LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
+        return false;
     }
+    fputc(' ', handle_);
+
+    // Type string
+    fputs(pvsave::typeCodeString(value.type_code()), handle_);
+    fputc(' ', handle_);
+
+    // Value
+    char line[MAX_LINE_LENGTH];
+    line[0] = 0;
+    if (!dataToString(value, line, sizeof(line))) {
+        LOG_ERR("Unable to serialize %s\n", channel.channelName.c_str());
+    }
+
+    fputs(line, handle_);
+    fputc('\n', handle_);
     return true;
 }
 
 /**
  * \brief Save implementation for JSON
  */
-bool fileSystemIO::saveJson(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount) {
+bool fileSystemIO::saveJson(const DataSource::Channel &channel, const Data &value) {
     const char *funcName = "fileSystemIO::saveJson";
-    fputs("{\n", handle_);
-    for (size_t i = 0; i < pvCount; ++i) {
-        pindent(handle_, 1);
+    
+    // Hack for json trailing commas. Need to finish off previous line, if any
+    if (currentChan_ > 0)
+        fputs(",\n", handle_);
+    else
+        fputs("\n", handle_);
+    pindent(handle_, 1);
 
-        const auto &value = pvValues[i];
-
-        // PV name and type
-        if (fprintf(handle_, "\"%s#%s\": ", 
-            pvNames[i].channelName.c_str(), pvsave::typeCodeString(value.type_code())) < 0)
-        {
-            LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
-            return false;
-        }
-
-        // Value
-        char line[MAX_LINE_LENGTH];
-        line[0] = 0;
-        if (!dataToString(pvValues[i], line, sizeof(line))) {
-            LOG_ERR("Unable to serialize %s\n", pvNames[i].channelName.c_str());
-        }
-
-        if (fprintf(handle_, "\"%s\"%s\n", line, i != pvCount - 1 ? "," : "") < 0) {
-            LOG_ERR("%s: fprintf failed: %s\n", funcName, strerror(errno));
-        }
+    // PV name and type
+    if (fprintf(handle_, "\"%s#%s\": ", channel.channelName.c_str(), pvsave::typeCodeString(value.type_code())) < 0) {
+        LOG_ERR("%s: fputs failed: %s\n", funcName, strerror(errno));
+        return false;
     }
-    fputs("}\n", handle_);
+
+    // Value
+    char line[MAX_LINE_LENGTH];
+    line[0] = 0;
+    if (!dataToString(value, line, sizeof(line))) {
+        LOG_ERR("Unable to serialize %s\n", channel.channelName.c_str());
+    }
+
+    if (fprintf(handle_, "\"%s\"", line) < 0) {
+        LOG_ERR("%s: fprintf failed: %s\n", funcName, strerror(errno));
+    }
+
+    fflush(handle_);
+    
+    currentChan_++;
     return true;
+}
+
+bool fileSystemIO::beginWriteJson() {
+    return fputs("{\n", handle_) >= 0;
+}
+
+void fileSystemIO::endWriteJson() {
+    fputs("\n}\n", handle_);
 }
 
 /**
  * Write data to disk
  */
-bool fileSystemIO::writeData(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data> &pvValues, size_t pvCount) {
-    const char *funcName = "fileSystemIO::writeData";
-    if (fseek(handle_, 0, SEEK_SET) != 0) {
-        printf("%s: fseek failed: %s\n", funcName, strerror(errno));
-        return false;
-    }
-
-    if (ftruncate(fileno(handle_), 0) < 0) {
-        printf("%s: ftruncate failed: %s\n", funcName, strerror(errno));
-        return false;
-    }
-
+bool fileSystemIO::writeData(const DataSource::Channel &channel, const Data &value) {
     switch (type_) {
     case FSIO_TYPE_TEXT:
-        return saveText(pvNames, pvValues, pvCount);
+        return saveText(channel, value);
     case FSIO_TYPE_JSON:
-        return saveJson(pvNames, pvValues, pvCount);
+        return saveJson(channel, value);
     default:
         break;
     }
-
     return false;
 }
 
@@ -227,7 +250,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
             auto pc = static_cast<JsonReadState*>(c);
             if (!pc->skip) {
                 auto* pstr = const_cast<unsigned char*>(value);
-                // SUCKS!! avoid copy, directly modify string...
+                // FIXME: SUCKS!! avoid copy, directly modify string...
                 auto c = *(pstr + l);
                 *(pstr + l) = 0;
                 auto result = dataParseString((const char*)pstr, pc->type);

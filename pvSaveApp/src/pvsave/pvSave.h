@@ -131,27 +131,27 @@ namespace pvsave {
 
         /** 
         * \brief Begins a write transaction
-        * \returns False if failed
+        * \returns True on success
         */
         virtual bool beginWrite() = 0;
 
         /** 
-         * \brief Write channel data to the IO backend
-         * \param channels List of channels to write
-         * \param pvData List of PV data. This is a 1:1 mapping to the channels
-         * \param pvCount Number of items in both arrays
+         * \brief Writes a single channel's data.
+         * \param channel The channel description
+         * \param data The data to write for this channel
+         * \returns True on success
          */
-        virtual bool writeData(const std::vector<DataSource::Channel>& channels, const std::vector<Data>& pvData, size_t pvCount) = 0;
+        virtual bool writeData(const DataSource::Channel& channel, const Data& data) = 0;
 
         /**
         * \brief Ends a write transaction
-        * \returns False if failed
+        * \returns True on success
         */
         virtual bool endWrite() = 0;
 
         /**
         * \brief Begins a read transaction
-        * \returns False if failed
+        * \returns True on success
         */
         virtual bool beginRead() = 0;
 
@@ -164,7 +164,7 @@ namespace pvsave {
 
         /**
         * \brief Ends a read transaction
-        * \returns False if failed
+        * \returns True on success
         */
         virtual bool endRead() = 0;
 

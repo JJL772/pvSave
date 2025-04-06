@@ -51,37 +51,34 @@ public:
 
     bool beginWrite() override { return initCurl(); }
 
-    bool writeData(const std::vector<DataSource::Channel> &pvNames, const std::vector<Data>& pvValues, size_t pvCount) override {
+    bool writeData(const DataSource::Channel &channel, const Data& value) override {
         const char *funcName = "HTTPIO::writeData";
 
         //std::string urlReq = url_ + "/pvput?";
         std::string urlReq;
         std::string reqUrl = url_ + "/pvput";
-        for (size_t i = 0; i < pvCount; ++i) {
+        char line[MAX_LINE_LENGTH];
+        line[0] = 0;
 
-            char line[MAX_LINE_LENGTH];
-            line[0] = 0;
+        strncat(line, channel.channelName.c_str(), sizeof(line) - 1);
+        strncat(line, " ", sizeof(line) - 1);
+        strncat(line, pvsave::typeCodeString(value.type_code()), sizeof(line) - 1);
+        strncat(line, " ", sizeof(line) - 1);
 
-            strncat(line, pvNames[i].channelName.c_str(), sizeof(line)-1);
-            strncat(line, " ", sizeof(line)-1);
-            strncat(line, pvsave::typeCodeString(pvValues[i].type_code()), sizeof(line)-1);
-            strncat(line, " ", sizeof(line)-1);
-
-            char buf[MAX_LINE_LENGTH];
-            if (!dataToString(pvValues[i], buf, sizeof(buf))) {
-                printf("Unable to serialize %s\n", pvNames[i].channelName.c_str());
-                continue;
-            }
-            strncat(line, buf, sizeof(line)-1);
-            strncat(line, "\n", sizeof(line)-1);
-
-            if (i > 0 && i < pvCount)
-                urlReq.append("&");
-            auto* ps = curl_easy_escape(curl_, line, strlen(line));
-            urlReq.append(ps);
-            free(ps);
-            //urlReq.append(line);
+        char buf[MAX_LINE_LENGTH];
+        if (!dataToString(value, buf, sizeof(buf))) {
+            printf("Unable to serialize %s\n", channel.channelName.c_str());
+            return false;
         }
+        strncat(line, buf, sizeof(line) - 1);
+        strncat(line, "\n", sizeof(line) - 1);
+
+        // if (i > 0 && i < pvCount)
+        //     urlReq.append("&");
+        auto* ps = curl_easy_escape(curl_, line, strlen(line));
+        urlReq.append(ps);
+        free(ps);
+        // urlReq.append(line);
 
         curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, urlReq.c_str());
 
