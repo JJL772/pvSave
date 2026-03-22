@@ -10,8 +10,6 @@ include $(TOP)/configure/CONFIG
 
 LIBRARY_IOC += pvSave
 
-# xxxRecord.h will be created from xxxRecord.dbd
-#DBDINC += xxxRecord
 # install pvSave.dbd into <top>/dbd
 DBD += pvSave.dbd
 
@@ -23,6 +21,9 @@ pvSave_SRCS += serialize.cpp
 pvSave_SRCS += dataSourceDb.cpp
 pvSave_SRCS += statusControl.cpp
 
+ifdef PVXS_MAJOR_VERSION
+pvSave_LIBS += pvxs
+endif
 pvSave_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 
@@ -33,6 +34,10 @@ INC += pvsave/utility.h
 INC += pvsave/variant.h
 
 USR_CXXFLAGS+=-std=c++14
+
+ifdef PVXS_MAJOR_VERSION
+USR_CXXFLAGS += -DHAVE_PVXS=1
+endif
 
 #===========================
 

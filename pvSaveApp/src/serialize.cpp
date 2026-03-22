@@ -35,7 +35,8 @@ template<> int parseValue<epicsUInt64>(const char* str, epicsUInt64* out) { retu
 template<> int parseValue<epicsFloat32>(const char* str, epicsFloat32* out) { return epicsParseFloat32(str, out, nullptr); }
 template<> int parseValue<epicsFloat64>(const char* str, epicsFloat64* out) { return epicsParseFloat64(str, out, nullptr); }
 
-// FIXME: these overloads suck and will not work on some platforms. Pointer size check works with RTEMS 6 GCC 13.2.0, probably works on older GCC's too.
+// FIXME: Workaround for conflicting typedefs when epicsUint64 == uint64_t (may be ul, ull depending on arch)
+// Pointer size check works with RTEMS 6 GCC 13.2.0, probably works with older GCCs too.
 #if __SIZEOF_POINTER__ == 8
 template<> int parseValue<uint64_t>(const char* str, uint64_t* out) {
     *out = strtoul(str, nullptr, 10);
