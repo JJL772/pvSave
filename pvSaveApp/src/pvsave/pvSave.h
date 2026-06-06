@@ -16,7 +16,7 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <stdint.h>
 
@@ -40,7 +40,7 @@ namespace pvsave {
      * \brief Returns a reference to the global list of IO backend instances.
      * In general, this is for internal use and is automatically called by the SaveRestoreIO constructor.
      */
-    std::unordered_map<std::string, pvsave::SaveRestoreIO*> &ioBackends();
+    std::map<std::string, pvsave::SaveRestoreIO*> &ioBackends();
 
     DataSource* dataSource();
 
@@ -160,7 +160,7 @@ namespace pvsave {
          * \param pvNames PV names
          * \param pvValues PV values. pvValues will come in with length 0. It is up to you to add all output data here.
          */
-        virtual bool readData(std::unordered_map<std::string, Data>& pvs) = 0;
+        virtual bool readData(std::map<std::string, Data>& pvs) = 0;
 
         /**
         * \brief Ends a read transaction

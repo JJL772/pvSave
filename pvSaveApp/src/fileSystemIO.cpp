@@ -61,9 +61,9 @@ public:
 
     /** Reading interface */
     bool beginRead() override { return openFile(); }
-    bool readText(std::unordered_map<std::string, Data>& pvs);
-    bool readJson(std::unordered_map<std::string, Data>& pvs);
-    bool readData(std::unordered_map<std::string, Data>& pvs) override;
+    bool readText(std::map<std::string, Data>& pvs);
+    bool readJson(std::map<std::string, Data>& pvs);
+    bool readData(std::map<std::string, Data>& pvs) override;
     bool endRead() override { return true; }
 
     void report(FILE* fp, int indent) override;
@@ -119,7 +119,7 @@ bool fileSystemIO::openFile() {
 /**
  * Read data off disk
  */
-bool fileSystemIO::readData(std::unordered_map<std::string, Data>& pvs) {
+bool fileSystemIO::readData(std::map<std::string, Data>& pvs) {
     const char *funcName = "fileSystemIO::readData";
     if (fseek(handle_, 0, SEEK_SET) != 0) {
         printf("%s: fseek failed: %s\n", funcName, strerror(errno));
@@ -228,7 +228,7 @@ bool fileSystemIO::writeData(const DataSource::Channel &channel, const Data &val
 /**
  * \brief Implementation of JSON reading using yajl
  */
-bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
+bool fileSystemIO::readJson(std::map<std::string, Data>& pvs) {
     static const char* funcName = "fileSystemIO::readJson";
     bool success = true;
 
@@ -239,7 +239,7 @@ bool fileSystemIO::readJson(std::unordered_map<std::string, Data>& pvs) {
     };
 
     struct JsonReadState {
-        std::unordered_map<std::string, Data>& pvs;
+        std::map<std::string, Data>& pvs;
         ETypeCode type;
         std::string curPv;
         bool skip;
@@ -319,7 +319,7 @@ done:
 /**
  * Implementation of autosave-like text format for SAV files
  */
-bool fileSystemIO::readText(std::unordered_map<std::string, Data> &pvs) {
+bool fileSystemIO::readText(std::map<std::string, Data> &pvs) {
     const char *funcName = "fileSystemIO::readText";
 
     const size_t bl = 16384;

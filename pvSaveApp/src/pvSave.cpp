@@ -52,9 +52,9 @@ static int s_lastStatus;
 ELoggingLevel pvsave::logLevel = ELoggingLevel::LL_Info;
 
 /** Global list of IO backend instances */
-std::unordered_map<std::string, pvsave::SaveRestoreIO*>& pvsave::ioBackends()
+std::map<std::string, pvsave::SaveRestoreIO*>& pvsave::ioBackends()
 {
-    static std::unordered_map<std::string, pvsave::SaveRestoreIO*> b;
+    static std::map<std::string, pvsave::SaveRestoreIO*> b;
     return b;
 }
 
@@ -224,7 +224,7 @@ bool SaveContext::restore(pvsave::SaveRestoreIO* io)
         return false;
     }
 
-    std::unordered_map<std::string, pvsave::Data> pvs;
+    std::map<std::string, pvsave::Data> pvs;
     if (!io->readData(pvs)) {
         LOG_ERR("pvSave: io->readData: restore failed\n");
         // Fallthrough to allow cleanup

@@ -166,7 +166,7 @@ public:
     }
 #endif
 
-    bool readData(std::unordered_map<std::string, Data>& pvs) override {
+    bool readData(std::map<std::string, Data>& pvs) override {
         const char *funcName = "HTTPIO::readData";
 
         return false;
