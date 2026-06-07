@@ -14,8 +14,6 @@
  * ----------------------------------------------------------------------------
  **/
 
-#include <atomic>
-#include <list>
 #include <memory>
 #include <stdio.h>
 #include <string>
@@ -348,10 +346,10 @@ static bool readPvList(FILE* fp, const char* defs, std::vector<std::string>& lis
         if ((s = strpbrk(line, "#")))
             *s = 0;
 
-        char expanded[MAX_LINE_LENGTH];
+        char expanded[MAX_LINE_LENGTH] = {0};
         long elen = 0;
         if ((elen = macExpandString(handle, line, expanded, sizeof(expanded))) < 0) {
-            LOG_WARN("readPvList: unexpanded macro string\n");
+            LOG_WARN("readPvList: unexpanded macro string '%s'\n", expanded);
             // Treat this as a success
         }
 
@@ -740,7 +738,7 @@ static void pvSave_SetThreadPriorityCallFunc(const iocshArgBuf* buf)
 
 static void pvSave_SaveCallFunc(const iocshArgBuf* buf)
 {
-    printf("pvSave: Forcing save...\n");
+    LOG_INFO("pvSave: Forcing save...\n");
     pvsave::saveAllNow();
 }
 
@@ -782,7 +780,7 @@ static void pvSave_InitFromDbCallFunc(const iocshArgBuf* buf)
         return;
     }
 
-    printf("%s: Starting lookup of EPICS PVs...\n", funcName);
+    LOG_INFO("%s: Starting lookup of EPICS PVs...\n", funcName);
 
     epicsTimeStamp start, end;
     epicsTimeGetCurrent(&start);
@@ -806,7 +804,7 @@ static void pvSave_InitFromDbCallFunc(const iocshArgBuf* buf)
     dbFinishEntry(&dbe);
 
     epicsTimeGetCurrent(&end);
-    printf("%s: Completed lookup in %.2f seconds\n", funcName, epicsTimeDiffInSeconds(&end, &start));
+    LOG_INFO("%s: Completed lookup in %.2f seconds\n", funcName, epicsTimeDiffInSeconds(&end, &start));
 }
 
 

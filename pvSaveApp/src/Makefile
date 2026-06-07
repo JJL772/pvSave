@@ -24,12 +24,12 @@ pvSave_SRCS += statusControl.cpp
 ifdef PVXS_MAJOR_VERSION
 pvSave_LIBS += pvxs
 endif
+
 pvSave_LIBS += $(EPICS_BASE_IOC_LIBS)
 pvSave_LIBS += $(EPICS_BASE_PVA_CORE_LIBS)
 
 INC += pvsave/pvSave.h
 INC += pvsave/serialize.h
-INC += pvsave/pvxsSerialize.h
 INC += pvsave/utility.h
 INC += pvsave/variant.h
 

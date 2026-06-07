@@ -27,5 +27,7 @@ $(foreach dir, $(filter %Top, $(DIRS)), \
 iocBoot_DEPEND_DIRS += $(filter %App,$(DIRS))
 
 # Add any additional dependency rules here:
+pvSaveHttpApp_DEPEND_DIRS += pvSaveApp
+pvSaveTestApp_DEPEND_DIRS += pvSaveApp pvSaveHttpApp
 
 include $(TOP)/configure/RULES_TOP

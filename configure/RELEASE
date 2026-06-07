@@ -37,7 +37,7 @@
 # Don't set your version to anything such as "test" that
 # could match a directory name.
 # ==========================================================
-PVXS_MODULE_VERSION=R1.5.2-1.0.0
+#PVXS_MODULE_VERSION=R1.5.2-1.0.0
 
 # ==========================================================
 # Define module paths using pattern
@@ -45,7 +45,7 @@ PVXS_MODULE_VERSION=R1.5.2-1.0.0
 #  or
 # FOO = /Full/Path/To/Development/Version 
 # ==========================================================
-PVXS=$(EPICS_MODULES)/pvxs/$(PVXS_MODULE_VERSION)
+#PVXS=$(EPICS_MODULES)/pvxs/$(PVXS_MODULE_VERSION)
 
 # Override in RELEASE.local please!
 EPICS_BASE=$(EPICS_SITE_TOP)/base/$(BASE_MODULE_VERSION)
